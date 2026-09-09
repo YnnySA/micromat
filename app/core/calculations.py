@@ -145,3 +145,61 @@ def result_summary(material: MaterialSystem) -> dict[str, Any]:
         "elastic": asdict(elastic_properties(material)),
         "strength": asdict(strength_properties(material)),
     }
+
+
+# Implements: specs/04-estudio-parametrico.md
+
+def parametric_sweep(material: MaterialSystem, vf_min: float, vf_max: float, steps: int = 200) -> dict[str, list[float]]:
+    import numpy as np
+    vfs = np.linspace(vf_min, vf_max, steps).tolist()
+    
+    e1_list = []
+    e2_list = []
+    e2_rom_list = []
+    g12_list = []
+    nu12_list = []
+    f1t_list = []
+    f1c_list = []
+    density_list = []
+    specific_stiffness_list = []
+    
+    for vf in vfs:
+        elastic = elastic_properties(material, vf)
+        e1_list.append(elastic.e1_gpa)
+        e2_list.append(elastic.e2_gpa)
+        
+        e2_rom = rom(material.fiber["ef2_gpa"], material.matrix["em_gpa"], vf)
+        e2_rom_list.append(e2_rom)
+        
+        g12_list.append(elastic.g12_gpa)
+        nu12_list.append(elastic.nu12)
+        
+        strengths = strength_properties(material, vf)
+        f1t_list.append(strengths.f1t.value_mpa)
+        f1c_list.append(strengths.f1c.value_mpa)
+        
+        density = vf * material.fiber["density"] + (1.0 - vf) * material.matrix["density"]
+        density_list.append(density)
+        
+        specific_stiffness = (elastic.e1_gpa * 1e6) / density
+        specific_stiffness_list.append(specific_stiffness)
+        
+    return {
+        "vf": vfs,
+        "e1": e1_list,
+        "e2": e2_list,
+        "e2_rom": e2_rom_list,
+        "g12": g12_list,
+        "nu12": nu12_list,
+        "f1t": f1t_list,
+        "f1c": f1c_list,
+        "density": density_list,
+        "specific_stiffness": specific_stiffness_list,
+    }
+
+
+def optimal_vf(material: MaterialSystem, vf_min: float, vf_max: float, steps: int = 200) -> tuple[float, float]:
+    sweep = parametric_sweep(material, vf_min, vf_max, steps)
+    idx = max(range(len(sweep["specific_stiffness"])), key=lambda i: sweep["specific_stiffness"][i])
+    return sweep["vf"][idx], sweep["specific_stiffness"][idx]
+
