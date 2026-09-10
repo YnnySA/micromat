@@ -1,90 +1,70 @@
 # Implements: specs/01-visualizacion-resultados.md
-# Implements: specs/02-espacio-teoria-analisis.md
-"""Vista Streamlit de resultados micromecánicos."""
-
-from __future__ import annotations
+# Implements: specs/SPEC-UI-01-REDISENO VISUAL.md
+"""Vista Streamlit de resultados micromecanicos."""
 
 import streamlit as st
-
-from components.results_tables import (
-    render_elastic_table,
-    render_strength_table,
-    render_validation_table,
+import numpy as np
+from components.sidebar_inputs import render_sidebar
+from components.header import render_header
+from components.result_cards import render_result_cards
+from components.charts import (
+    render_elastic_chart,
+    render_strength_chart,
+    render_offaxis_chart,
+    render_envelope_chart,
+    render_comparison_chart,
 )
-from components.rve_display import render_rve
-from components.theory_panel import (
-    render_interpretation,
-    render_reliability_table,
-    render_theory_panel,
-)
-from core.calculations import (
-    InvalidResultsFileError,
-    MATERIALS,
-    elastic_properties,
-    load_results_file,
-    strength_properties,
-    validation_rows,
-)
+from core.micromechanics import elastic_properties_from_sidebar, strength_properties_from_sidebar
 
 
 def render_results_page() -> None:
-    st.title("Resultados micromecánicos")
-    selected_name = st.segmented_control(
-        "Sistema de material",
-        options=list(MATERIALS),
-        default="IM7/8552 (CFRP)",
-        key="results_material_system",
+    # 1. Sidebar y Header
+    fiber_props, matrix_props, Vf, fiber_name, matrix_name = render_sidebar()
+    render_header(fiber_name, matrix_name, Vf)
+
+    # 2. Calculos
+    elastic = elastic_properties_from_sidebar(fiber_props, matrix_props, Vf)
+    strength = strength_properties_from_sidebar(fiber_props, matrix_props, Vf)
+
+    props_flat = {**elastic, **strength}
+
+    # 3. Layout
+    render_result_cards(props_flat)
+
+    # Tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        ["Módulos Elásticos", "Resistencias", "Off-Axis", "Envolvente", "Comparación"]
     )
-    material = MATERIALS[selected_name or "IM7/8552 (CFRP)"]
-    st.caption(f"Fracción volumétrica de referencia: Vf = {material.vf_reference:.2f}")
 
-    with st.container(border=True):
-        st.subheader("Propiedades elásticas")
-        render_elastic_table(elastic_properties(material))
-        render_interpretation(material.name)
+    # Datos para graficos de barrido
+    vf_data = np.arange(0.05, 0.81, 0.01)
 
-    with st.container(border=True):
-        st.subheader("Propiedades de resistencia")
-        render_strength_table(strength_properties(material))
-        st.caption("La confiabilidad se expresa con estrellas según el modelo utilizado.")
-        render_reliability_table()
+    with tab1:
+        elastic_sweep = {"E1": [], "E2": [], "G12": [], "nu12": []}
+        for v in vf_data:
+            e = elastic_properties_from_sidebar(fiber_props, matrix_props, v)
+            elastic_sweep["E1"].append(e["E1"])
+            elastic_sweep["E2"].append(e["E2"])
+            elastic_sweep["G12"].append(e["G12"])
+            elastic_sweep["nu12"].append(e["nu12"])
+        render_elastic_chart(vf_data, elastic_sweep, Vf)
 
-    with st.container(border=True):
-        render_theory_panel()
+    with tab2:
+        strength_sweep = {"F1t": [], "F1c": [], "F2t": [], "F2c": [], "F12s": []}
+        for v in vf_data:
+            s = strength_properties_from_sidebar(fiber_props, matrix_props, v)
+            strength_sweep["F1t"].append(s["F1t"])
+            strength_sweep["F1c"].append(s["F1c"])
+            strength_sweep["F2t"].append(s["F2t"])
+            strength_sweep["F2c"].append(s["F2c"])
+            strength_sweep["F12s"].append(s["F12s"])
+        render_strength_chart(vf_data, strength_sweep, Vf)
 
-    compare = st.toggle("Comparar con valores experimentales", key="results_compare_experimental")
-    if compare:
-        with st.container(border=True):
-            st.subheader("Validación experimental")
-            render_validation_table(validation_rows(material))
-            st.info(
-                "Los errores superiores al 20 % se resaltan. Barbero, Rosen y las "
-                "estimaciones empíricas son modelos de prediseño y requieren validación experimental."
-            )
+    with tab3:
+        render_offaxis_chart(props_flat)
 
-    with st.expander("Visualización RVE", expanded=True):
-        render_rve(material)
+    with tab4:
+        render_envelope_chart(props_flat)
 
-    with st.expander("Cargar archivo de resultados JSON"):
-        uploaded = st.file_uploader("Archivo JSON", type=["json"], key="results_file")
-        if uploaded is not None:
-            temporary_path = None
-            try:
-                temporary_path = _write_uploaded_file(uploaded)
-                payload = load_results_file(temporary_path)
-                st.success(f"Archivo válido para {payload['system']}.")
-            except InvalidResultsFileError as exc:
-                st.error(str(exc))
-            finally:
-                if temporary_path is not None:
-                    temporary_path.unlink(missing_ok=True)
-
-
-def _write_uploaded_file(uploaded_file):
-    import tempfile
-    from pathlib import Path
-
-    handle = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-    handle.write(uploaded_file.getvalue())
-    handle.close()
-    return Path(handle.name)
+    with tab5:
+        render_comparison_chart(matrix_props, Vf)

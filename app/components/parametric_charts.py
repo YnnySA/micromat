@@ -8,6 +8,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 
 from core.calculations import MATERIALS, parametric_sweep
+from styles.theme import BG_CHART, BORDER_DIM, TEXT_PRIMARY
 
 @st.cache_data
 def plot_e1_e2(vf_min: float, vf_max: float) -> go.Figure:
@@ -31,12 +32,14 @@ def plot_e1_e2(vf_min: float, vf_max: float) -> go.Figure:
         fig.add_vline(x=0.60, line=dict(color="#2C3E50", width=1, dash="dash"), row=1, col=col)
         fig.add_vline(x=0.55, line=dict(color="#1A5276", width=1, dash="dash"), row=1, col=col)
         
-    fig.update_xaxes(title_text="Vf [-]", gridcolor="rgba(0,0,0,0.1)")
-    fig.update_yaxes(title_text="Módulo [GPa]", gridcolor="rgba(0,0,0,0.1)")
+    fig.update_xaxes(title_text="Vf [-]", gridcolor=BORDER_DIM)
+    fig.update_yaxes(title_text="Módulo [GPa]", gridcolor=BORDER_DIM)
     
     fig.update_layout(
         title="Módulos Elásticos vs Fracción Volumétrica de Fibra (Vf)",
-        plot_bgcolor="white",
+        paper_bgcolor=BG_CHART,
+        plot_bgcolor=BG_CHART,
+        font=dict(color=TEXT_PRIMARY),
         legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
         height=500
     )
@@ -62,13 +65,15 @@ def plot_g12_nu12(vf_min: float, vf_max: float) -> go.Figure:
         fig.add_vline(x=0.60, line=dict(color="#2C3E50", width=1, dash="dash"), row=1, col=col)
         fig.add_vline(x=0.55, line=dict(color="#1A5276", width=1, dash="dash"), row=1, col=col)
         
-    fig.update_xaxes(title_text="Vf [-]", gridcolor="rgba(0,0,0,0.1)")
-    fig.update_yaxes(row=1, col=1, title_text="G12 [GPa]", gridcolor="rgba(0,0,0,0.1)")
-    fig.update_yaxes(row=1, col=2, title_text="ν12 [-]", gridcolor="rgba(0,0,0,0.1)")
+    fig.update_xaxes(title_text="Vf [-]", gridcolor=BORDER_DIM)
+    fig.update_yaxes(row=1, col=1, title_text="G12 [GPa]", gridcolor=BORDER_DIM)
+    fig.update_yaxes(row=1, col=2, title_text="ν12 [-]", gridcolor=BORDER_DIM)
     
     fig.update_layout(
         title="G12 y ν12 vs Fracción Volumétrica de Fibra (Vf)",
-        plot_bgcolor="white",
+        paper_bgcolor=BG_CHART,
+        plot_bgcolor=BG_CHART,
+        font=dict(color=TEXT_PRIMARY),
         legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
         height=500
     )
@@ -85,14 +90,15 @@ def plot_strength_im7(vf_min: float, vf_max: float) -> go.Figure:
     
     fig.add_vline(x=0.60, line=dict(color="#2C3E50", width=1.2, dash="dot"))
     
-    fig.update_xaxes(title_text="Vf [-]", gridcolor="rgba(0,0,0,0.1)")
-    fig.update_yaxes(title_text="Resistencia [MPa]", gridcolor="rgba(0,0,0,0.1)")
+    fig.update_xaxes(title_text="Vf [-]", gridcolor=BORDER_DIM)
+    fig.update_yaxes(title_text="Resistencia [MPa]", gridcolor=BORDER_DIM)
     
     fig.update_layout(
         title="Resistencias Longitudes F1t y F1c vs Vf (IM7/8552 CFRP)",
-        plot_bgcolor="white",
+        paper_bgcolor=BG_CHART,
+        plot_bgcolor=BG_CHART,
+        font=dict(color=TEXT_PRIMARY),
         legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
         height=450
     )
     return fig
-

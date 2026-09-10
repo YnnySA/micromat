@@ -54,3 +54,14 @@ class ValidationRow:
     @property
     def exceeds_twenty_percent(self) -> bool:
         return self.error_percent > 20.0
+
+
+@dataclass(frozen=True)
+class DesignResult:
+    factible: bool
+    vf_min: float | None = None
+    e1_at_vf: float | None = None
+    f1t_at_vf: float | None = None
+    density: float | None = None
+    specific_stiffness: float | None = None
+    active_constraint: str | None = None

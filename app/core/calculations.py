@@ -9,58 +9,18 @@ from pathlib import Path
 from typing import Any
 
 from .models import (
+    DesignResult,
     ElasticProperties,
     MaterialSystem,
     StrengthProperties,
     StrengthProperty,
     ValidationRow,
 )
+from .materials_db import MATERIALS
 
 
 class InvalidResultsFileError(ValueError):
     """Indica que un archivo JSON no cumple el contrato de resultados."""
-
-
-MATERIALS: dict[str, MaterialSystem] = {
-    "IM7/8552 (CFRP)": MaterialSystem(
-        name="IM7/8552 (CFRP)",
-        fiber_name="IM7",
-        matrix_name="8552",
-        vf_reference=0.60,
-        fiber={
-            "ef1_gpa": 276.0, "ef2_gpa": 19.0, "gf12_gpa": 27.0,
-            "nu": 0.20, "density": 1780.0, "ftu_mpa": 5180.0,
-            "etu": 0.0187,
-        },
-        matrix={
-            "em_gpa": 4.67, "gm_gpa": 1.72, "nu": 0.36,
-            "density": 1300.0, "ftu_mpa": 121.0,
-        },
-        experimental={
-            "E1": 164.0, "E2": 8.98, "G12": 5.29, "nu12": 0.30,
-            "F1t": 2326.0, "F1c": 1200.0, "F2t": 62.3,
-            "F2c": 254.0, "F6": 92.0,
-        },
-        rve={"fibers": 51, "vf_achieved": 0.532, "vf_target": 0.60, "attempts": 100000},
-    ),
-    "E-glass/Epoxi (GFRP)": MaterialSystem(
-        name="E-glass/Epoxi (GFRP)",
-        fiber_name="E-glass",
-        matrix_name="Epoxi",
-        vf_reference=0.55,
-        fiber={
-            "ef1_gpa": 72.0, "ef2_gpa": 72.0, "gf12_gpa": 29.5,
-            "nu": 0.22, "density": 2540.0, "ftu_mpa": 2400.0,
-            "etu": 0.034,
-        },
-        matrix={
-            "em_gpa": 3.50, "gm_gpa": 1.28, "nu": 0.38,
-            "density": 1200.0, "ftu_mpa": 80.0,
-        },
-        experimental={"E1": 41.0, "E2": 10.5, "G12": 4.2, "nu12": 0.28},
-        rve={"fibers": 8, "vf_achieved": 0.492, "vf_target": 0.55, "attempts": 100000},
-    ),
-}
 
 
 def rom(property_fiber: float, property_matrix: float, vf: float) -> float:
@@ -138,6 +98,24 @@ def load_results_file(path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def offAxisStiffness(e1: float, e2: float, g12: float, nu12: float, theta_deg: float) -> float:
+    """Módulo elástico off-axis Ex(θ) en GPa."""
+    import numpy as np
+    theta = np.radians(theta_deg)
+    c, s = np.cos(theta), np.sin(theta)
+    inv_ex = c**4 / e1 + s**4 / e2 + (s * c)**2 * (1.0 / g12 - 2.0 * nu12 / e1)
+    return 1.0 / inv_ex
+
+
+def calcProps(fiber: dict, matrix: dict, vf: float) -> dict[str, float]:
+    """Calcula propiedades elásticas desde formato sidebar_inputs (E1, E2, G12, nu12, E, nu, G)."""
+    e1 = rom(fiber["E1"], matrix["E"], vf)
+    e2 = halpin_tsai(fiber["E2"], matrix["E"], vf, xi=2.0)
+    g12 = halpin_tsai(fiber["G12"], matrix["G"], vf, xi=1.0)
+    nu12 = rom(fiber["nu12"], matrix["nu"], vf)
+    return {"E1": e1, "E2": e2, "G12": g12, "nu12": nu12}
+
+
 def result_summary(material: MaterialSystem) -> dict[str, Any]:
     return {
         "system": material.name,
@@ -203,3 +181,40 @@ def optimal_vf(material: MaterialSystem, vf_min: float, vf_max: float, steps: in
     idx = max(range(len(sweep["specific_stiffness"])), key=lambda i: sweep["specific_stiffness"][i])
     return sweep["vf"][idx], sweep["specific_stiffness"][idx]
 
+
+# Implements: specs/05-diseno-inverso.md
+
+def inverse_design_search(material: MaterialSystem, e1_req_mpa: float, f1t_req_mpa: float, vf_max: float) -> DesignResult:
+    import numpy as np
+    
+    # Rango dinámico 0.01 a vf_max
+    vfs = np.linspace(0.01, vf_max, 6500)
+    
+    for vf in vfs:
+        elastic = elastic_properties(material, vf)
+        strengths = strength_properties(material, vf)
+        
+        # Convertir E1 a MPa para comparar con req
+        e1_mpa = elastic.e1_gpa * 1000.0
+        
+        if e1_mpa >= e1_req_mpa and strengths.f1t.value_mpa >= f1t_req_mpa:
+            density = vf * material.fiber["density"] + (1.0 - vf) * material.matrix["density"]
+            specific_stiffness = (e1_mpa) / density
+            
+            # Identificar restricción activa
+            e1_margin = e1_mpa - e1_req_mpa
+            f1t_margin = strengths.f1t.value_mpa - f1t_req_mpa
+            
+            active = "E1" if e1_margin < f1t_margin else "F1t"
+            
+            return DesignResult(
+                factible=True,
+                vf_min=float(vf),
+                e1_at_vf=float(e1_mpa),
+                f1t_at_vf=float(strengths.f1t.value_mpa),
+                density=float(density),
+                specific_stiffness=float(specific_stiffness),
+                active_constraint=active
+            )
+            
+    return DesignResult(factible=False)

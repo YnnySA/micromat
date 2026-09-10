@@ -1,16 +1,19 @@
 # Implements: specs/04-estudio-parametrico.md
+# Implements: specs/06-seleccion-materiales.md
 """Página UI de Estudio Paramétrico."""
 
 from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+from components.material_selector import render_material_selector
 
 from components.parametric_charts import plot_e1_e2, plot_g12_nu12, plot_strength_im7
 from core.calculations import MATERIALS, optimal_vf
 
 
 def render_parametric_page() -> None:
+    render_material_selector()
     st.title("Estudio Paramétrico")
     st.markdown("""
     Explore la variación de las propiedades elásticas y de resistencia en función de la fracción volumétrica de fibra ($V_f$).

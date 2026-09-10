@@ -1,9 +1,11 @@
 # Implements: specs/03-interfaz-limpia.md
+# Implements: specs/06-seleccion-materiales.md
 """Página de inicio y configuración de navegación."""
 
 import streamlit as st
+from components.material_selector import render_material_selector
 
-st.set_page_config(page_title="Materiales Compuestos", layout="wide")
+render_material_selector()
 
 st.title("Micromecánica de Materiales Compuestos")
 st.markdown("""

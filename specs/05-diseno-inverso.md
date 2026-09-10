@@ -99,3 +99,4 @@ Feature: Diseño inverso de materiales compuestos
 | AC-05-03 | Se identifica E1 como restricción activa para IM7/8552 | `test_active_constraint` |
 | AC-05-04 | Caso no factible muestra mensaje y sugiere acción | `test_infeasible_case` |
 | AC-05-05 | Los requisitos son editables y el recálculo es inmediato | `test_editable_requirements` |
+ 
