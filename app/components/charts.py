@@ -1,5 +1,11 @@
 # Implements: specs/SPEC-UI-01-REDISENO VISUAL.md (Section 8)
-"""Componentes de graficos Plotly para la vista de resultados."""
+# Implements: specs/08-interfaz-vintage-unificada.md
+"""Gráficos Plotly nativos: tema claro, líneas delgadas y etiquetas Unicode.
+
+Streamlit no carga MathJax, que es lo que Plotly necesita para renderizar LaTeX
+delimitado por signos de dólar. Por eso las etiquetas usan notación Unicode
+(E₁, ν₁₂, σ₁, …), que Plotly dibuja de forma nativa y sin dependencias de red.
+"""
 
 from __future__ import annotations
 
@@ -8,100 +14,159 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core.calculations import offAxisStiffness, calcProps
-from components.sidebar_inputs import FIBER_PRESETS
-from styles.theme import (
-    BG_CHART, BORDER_DIM, CYAN, GREEN, ORANGE, PURPLE, RED, GRAY,
-    TEXT_PRIMARY, TEXT_LABEL, TEXT_MUTED, FONT_MONO,
+from core.calculations import elastic_from_props, offAxisStiffness, strength_from_props
+from core import material_db
+
+# Paleta reducida y clara (papel sepia, tinta, un acento y apoyos apagados)
+PAPER = "#f4ecd8"
+INK = "#3d3428"
+GRID = "#d8ccae"
+ACCENT = "#1f6f6b"
+OCHRE = "#b07d2b"
+OLIVE = "#5c6b3c"
+RUST = "#a04b3a"
+VIOLET = "#6b5b95"
+FONT = "Consolas, 'Courier New', monospace"
+LINE_WIDTH = 1.3
+
+# Etiquetas libres de MathJax (se exportan para las pruebas de contrato).
+LABELS = (
+    "E₁", "E₂", "G₁₂", "ν₁₂",
+    "F₁ₜ", "F₁c", "F₂ₜ", "F₂c", "F₆",
+    "Vf", "θ", "σ₁", "σ₂", "Ex",
 )
 
 PLOTLY_LAYOUT = dict(
-    paper_bgcolor=BG_CHART,
-    plot_bgcolor=BG_CHART,
-    font=dict(family="JetBrains Mono, monospace", size=11, color=TEXT_PRIMARY),
-    xaxis=dict(gridcolor=BORDER_DIM, linecolor=BORDER_DIM, zerolinecolor=BORDER_DIM),
-    yaxis=dict(gridcolor=BORDER_DIM, linecolor=BORDER_DIM, zerolinecolor=BORDER_DIM),
-    legend=dict(bgcolor=BG_CHART, bordercolor=BORDER_DIM, borderwidth=1),
-    margin=dict(l=50, r=20, t=40, b=40),
+    paper_bgcolor=PAPER,
+    plot_bgcolor=PAPER,
+    font=dict(family=FONT, size=11, color=INK),
+    xaxis=dict(gridcolor=GRID, linecolor=GRID, zerolinecolor=GRID),
+    yaxis=dict(gridcolor=GRID, linecolor=GRID, zerolinecolor=GRID),
+    legend=dict(bgcolor=PAPER, bordercolor=GRID, borderwidth=1),
+    margin=dict(l=64, r=20, t=48, b=48),
     height=380,
 )
 
+VF_SWEEP: tuple[float, ...] = tuple(round(v, 2) for v in np.arange(0.05, 0.801, 0.01))
 
-def render_elastic_chart(vf_data: np.ndarray, elastic_data: dict, vf_current: float) -> None:
-    """Tab 'Modulos Elasticos': E1/E2/G12 vs Vf + nu12 vs Vf."""
+
+@st.cache_data(show_spinner=False)
+def _elastic_sweep(fiber: dict, matrix: dict, vfs: tuple[float, ...]) -> dict[str, list[float]]:
+    series = {"E1": [], "E2": [], "G12": [], "nu12": []}
+    for vf in vfs:
+        elastic = elastic_from_props(fiber, matrix, vf)
+        for key in series:
+            series[key].append(elastic[key])
+    return series
+
+
+@st.cache_data(show_spinner=False)
+def _strength_sweep(fiber: dict, matrix: dict, vfs: tuple[float, ...]) -> dict[str, list[float]]:
+    series = {"F1t": [], "F1c": [], "F2t": [], "F2c": [], "F6": []}
+    for vf in vfs:
+        strength = strength_from_props(fiber, matrix, vf)
+        for key in series:
+            series[key].append(strength[key])
+    return series
+
+
+def _reference_line(fig: go.Figure, vf_current: float) -> None:
+    fig.add_vline(x=vf_current, line=dict(color=INK, width=1, dash="dash"))
+
+
+# ---------------------------------------------------------------------------
+# Pestaña: Módulos Elásticos
+# ---------------------------------------------------------------------------
+
+def render_elastic_chart(fiber: dict, matrix: dict, vf_current: float) -> None:
+    sweep = _elastic_sweep(fiber, matrix, VF_SWEEP)
     col1, col2 = st.columns(2)
 
     with col1:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=vf_data, y=elastic_data["E1"], name="E1", line=dict(color=CYAN, width=2.5)))
-        fig.add_trace(go.Scatter(x=vf_data, y=elastic_data["E2"], name="E2", line=dict(color=GREEN, width=2.5)))
-        fig.add_trace(go.Scatter(x=vf_data, y=elastic_data["G12"], name="G12", line=dict(color=ORANGE, width=2.5)))
-        fig.add_vline(x=vf_current, line=dict(color=TEXT_MUTED, width=1, dash="dash"))
-        fig.update_layout(**PLOTLY_LAYOUT, title="Módulos vs Fracción de Volumen", xaxis_title="Vf", yaxis_title="Módulo [GPa]")
+        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["E1"], name="E₁", line=dict(color=ACCENT, width=LINE_WIDTH)))
+        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["E2"], name="E₂", line=dict(color=OCHRE, width=LINE_WIDTH)))
+        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["G12"], name="G₁₂", line=dict(color=OLIVE, width=LINE_WIDTH)))
+        _reference_line(fig, vf_current)
+        fig.update_layout(**PLOTLY_LAYOUT, title="Módulos vs fracción de volumen",
+                          xaxis_title="Vf [-]", yaxis_title="E [GPa]")
         st.plotly_chart(fig, width="stretch")
 
     with col2:
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=vf_data, y=elastic_data["nu12"], name="nu12", line=dict(color=PURPLE, width=2.5)))
-        fig2.add_vline(x=vf_current, line=dict(color=TEXT_MUTED, width=1, dash="dash"))
-        fig2.update_layout(**PLOTLY_LAYOUT, title="Coeficiente de Poisson nu12 vs Vf", xaxis_title="Vf", yaxis_title="nu12")
+        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["nu12"], name="ν₁₂", line=dict(color=VIOLET, width=LINE_WIDTH)))
+        _reference_line(fig2, vf_current)
+        fig2.update_layout(**PLOTLY_LAYOUT, title="Coeficiente de Poisson ν₁₂ vs Vf",
+                           xaxis_title="Vf [-]", yaxis_title="ν₁₂ [-]")
         st.plotly_chart(fig2, width="stretch")
 
 
-def render_strength_chart(vf_data: np.ndarray, strength_data: dict, vf_current: float) -> None:
-    """Tab 'Resistencias': F1t/F1c vs Vf + F2t/F2c/F12s vs Vf."""
+# ---------------------------------------------------------------------------
+# Pestaña: Resistencias
+# ---------------------------------------------------------------------------
+
+def render_strength_chart(fiber: dict, matrix: dict, vf_current: float) -> None:
+    sweep = _strength_sweep(fiber, matrix, VF_SWEEP)
     col1, col2 = st.columns(2)
 
     with col1:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=vf_data, y=strength_data["F1t"], name="F1t", line=dict(color=CYAN, width=2.5)))
-        fig.add_trace(go.Scatter(x=vf_data, y=strength_data["F1c"], name="F1c", line=dict(color=RED, width=2.5)))
-        fig.add_vline(x=vf_current, line=dict(color=TEXT_MUTED, width=1, dash="dash"))
-        fig.update_layout(**PLOTLY_LAYOUT, title="Resistencias Longitudinales vs Vf", xaxis_title="Vf", yaxis_title="Resistencia [MPa]")
+        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F1t"], name="F₁ₜ", line=dict(color=ACCENT, width=LINE_WIDTH)))
+        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F1c"], name="F₁c", line=dict(color=RUST, width=LINE_WIDTH)))
+        _reference_line(fig, vf_current)
+        fig.update_layout(**PLOTLY_LAYOUT, title="Resistencias longitudinales vs Vf",
+                          xaxis_title="Vf [-]", yaxis_title="F [MPa]")
         st.plotly_chart(fig, width="stretch")
 
     with col2:
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=vf_data, y=strength_data["F2t"], name="F2t", line=dict(color=GREEN, width=2.5)))
-        fig2.add_trace(go.Scatter(x=vf_data, y=strength_data["F2c"], name="F2c", line=dict(color=ORANGE, width=2.5)))
-        fig2.add_trace(go.Scatter(x=vf_data, y=strength_data["F12s"], name="F12s", line=dict(color=PURPLE, width=2.5)))
-        fig2.add_vline(x=vf_current, line=dict(color=TEXT_MUTED, width=1, dash="dash"))
-        fig2.update_layout(**PLOTLY_LAYOUT, title="Resistencias Transversales vs Vf", xaxis_title="Vf", yaxis_title="Resistencia [MPa]")
+        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F2t"], name="F₂ₜ", line=dict(color=OLIVE, width=LINE_WIDTH)))
+        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F2c"], name="F₂c", line=dict(color=OCHRE, width=LINE_WIDTH)))
+        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F6"], name="F₆", line=dict(color=VIOLET, width=LINE_WIDTH)))
+        _reference_line(fig2, vf_current)
+        fig2.update_layout(**PLOTLY_LAYOUT, title="Resistencias transversales y cortante vs Vf",
+                           xaxis_title="Vf [-]", yaxis_title="F [MPa]")
         st.plotly_chart(fig2, width="stretch")
 
 
-def render_offaxis_chart(props: dict):
-    """Tab 'Off-Axis': Ex(theta) + tabla de valores destacados."""
-    thetas = np.arange(0, 91, 2)
-    ex_vals = [offAxisStiffness(props["E1"], props["E2"], props["G12"], props["nu12"], t) for t in thetas]
+# ---------------------------------------------------------------------------
+# Pestaña: Off-Axis
+# ---------------------------------------------------------------------------
+
+def render_offaxis_chart(props: dict) -> None:
+    thetas = tuple(range(0, 91, 2))
+    ex_values = [offAxisStiffness(props["E1"], props["E2"], props["G12"], props["nu12"], t) for t in thetas]
 
     col1, col2 = st.columns([2, 1])
     with col1:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=thetas, y=ex_vals, name="Ex(θ)", line=dict(color=CYAN, width=2.5)))
+        fig.add_trace(go.Scatter(x=thetas, y=ex_values, name="Ex(θ)", line=dict(color=ACCENT, width=LINE_WIDTH)))
+        marks = (0, 15, 30, 45, 60, 75, 90)
         fig.add_trace(go.Scatter(
-            x=[0, 15, 30, 45, 60, 75, 90],
-            y=[offAxisStiffness(props["E1"], props["E2"], props["G12"], props["nu12"], t)
-               for t in [0, 15, 30, 45, 60, 75, 90]],
+            x=marks,
+            y=[offAxisStiffness(props["E1"], props["E2"], props["G12"], props["nu12"], t) for t in marks],
             mode="markers",
-            marker=dict(color=CYAN, size=7),
+            marker=dict(color=ACCENT, size=6),
             name="Puntos destacados",
         ))
-        fig.update_layout(**PLOTLY_LAYOUT, title="Módulo Longitudinal Off-Axis Ex(θ)",
-                          xaxis_title="θ (°)", yaxis_title="Ex (GPa)")
+        fig.update_layout(**PLOTLY_LAYOUT, title="Módulo off-axis Ex(θ)",
+                          xaxis_title="θ (°)", yaxis_title="Ex [GPa]")
         st.plotly_chart(fig, width="stretch")
 
     with col2:
-        st.markdown(f'''
-        <div style="background:#111827; padding:10px; border:1px solid {BORDER_DIM}; border-radius:4px;">
-            <div style="color:{TEXT_LABEL}; font-size:10px; margin-bottom:5px;">VALORES DESTACADOS</div>
-            {''.join(f'<div style="display:flex; justify-content:space-between; font-family:{FONT_MONO}; font-size:11px; margin-bottom:2px;"><span style="color:{TEXT_PRIMARY};">θ={t}°</span><span style="color:{CYAN};">{offAxisStiffness(props["E1"], props["E2"], props["G12"], props["nu12"], t):.2f} GPa</span></div>' for t in [0, 15, 30, 45, 60, 75, 90])}
-        </div>
-        ''', unsafe_allow_html=True)
+        st.caption("VALORES DESTACADOS")
+        table = pd.DataFrame({
+            "θ (°)": list(marks),
+            "Ex (GPa)": [round(offAxisStiffness(props["E1"], props["E2"], props["G12"], props["nu12"], t), 2) for t in marks],
+        })
+        st.dataframe(table, hide_index=True)
 
 
-def render_envelope_chart(props: dict):
-    """Tab 'Envolvente': Tsai-Wu failure envelope + panel de parametros."""
+# ---------------------------------------------------------------------------
+# Pestaña: Envolvente Tsai-Wu
+# ---------------------------------------------------------------------------
+
+def render_envelope_chart(props: dict) -> None:
     f1t, f1c, f2t, f2c = props["F1t"], props["F1c"], props["F2t"], props["F2c"]
     f1 = 1 / f1t - 1 / f1c
     f2 = 1 / f2t - 1 / f2c
@@ -109,7 +174,7 @@ def render_envelope_chart(props: dict):
     f22 = 1 / (f2t * f2c)
     f12 = -0.5 * np.sqrt(f11 * f22)
 
-    pts = []
+    points = []
     for phi in np.linspace(0, 2 * np.pi, 360):
         c, s = np.cos(phi), np.sin(phi)
         a = f11 * c**2 + f22 * s**2 + 2 * f12 * c * s
@@ -118,55 +183,71 @@ def render_envelope_chart(props: dict):
         if disc >= 0 and a != 0:
             r = (-b + np.sqrt(disc)) / (2 * a)
             if 0 < r < 10000:
-                pts.append((r * c, r * s))
+                points.append((r * c, r * s))
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=[p[0] for p in pts], y=[p[1] for p in pts],
-                                 fill="toself", fillcolor="rgba(34,211,238,0.08)",
-                                 line=dict(color=CYAN), name="Tsai-Wu"))
-        fig.add_vline(x=0, line=dict(color=BORDER_DIM))
-        fig.add_hline(y=0, line=dict(color=BORDER_DIM))
-        fig.update_layout(**PLOTLY_LAYOUT, title="Envolvente de Fallo — Criterio Tsai-Wu",
-                          xaxis_title="σ1 (MPa)", yaxis_title="σ2 (MPa)")
+        fig.add_trace(go.Scatter(
+            x=[p[0] for p in points], y=[p[1] for p in points],
+            fill="toself", fillcolor="rgba(31,111,107,0.10)",
+            line=dict(color=ACCENT, width=LINE_WIDTH), name="Tsai-Wu",
+        ))
+        fig.add_vline(x=0, line=dict(color=GRID, width=1))
+        fig.add_hline(y=0, line=dict(color=GRID, width=1))
+        fig.update_layout(**PLOTLY_LAYOUT, title="Envolvente de fallo — criterio Tsai-Wu",
+                          xaxis_title="σ₁ (MPa)", yaxis_title="σ₂ (MPa)")
         st.plotly_chart(fig, width="stretch")
 
     with col2:
-        st.markdown(f'''
-        <div style="background:#111827; padding:10px; border:1px solid {BORDER_DIM}; border-radius:4px;">
-            <div style="color:{TEXT_LABEL}; font-size:10px; margin-bottom:5px;">CRITERIO TSAI-WU</div>
-            <div style="color:{TEXT_PRIMARY}; font-family:{FONT_MONO}; font-size:10px; margin-bottom:8px;">
-                F1·σ1 + F2·σ2 + F11·σ1² + F22·σ2² + 2·F12·σ1·σ2 = 1
-            </div>
-            <div style="color:{TEXT_LABEL}; font-size:10px; margin-bottom:5px;">PARAMETROS</div>
-            {''.join(f'<div style="display:flex; justify-content:space-between; font-family:{FONT_MONO}; font-size:11px; margin-bottom:2px;"><span style="color:{TEXT_PRIMARY};">{label}</span><span style="color:{CYAN};">{val:.1f} MPa</span></div>' for label, val in [("F1t", f1t), ("F1c", f1c), ("F2t", f2t), ("F2c", f2c)])}
-        </div>
-        ''', unsafe_allow_html=True)
+        st.caption("CRITERIO TSAI-WU")
+        st.markdown("F₁σ₁ + F₂σ₂ + F₁₁σ₁² + F₂₂σ₂² + 2F₁₂σ₁σ₂ = 1")
+        st.caption("PARÁMETROS")
+        params = pd.DataFrame({
+            "Propiedad": ["F₁ₜ", "F₁c", "F₂ₜ", "F₂c"],
+            "Valor (MPa)": [round(f1t, 1), round(f1c, 1), round(f2t, 1), round(f2c, 1)],
+        })
+        st.dataframe(params, hide_index=True)
 
 
-def render_comparison_chart(matrix_props: dict, vf: float):
-    """Tab 'Comparacion': modulos y F1t por fibra con la matriz/Vf actual."""
-    data = []
-    for name, f in FIBER_PRESETS.items():
-        p = calcProps(f, matrix_props, vf)
-        data.append({"name": name, "E1": p["E1"], "E2": p["E2"], "G12": p["G12"], "F1t": f["F1t"] * vf + matrix_props["Ft"] * (1 - vf)})
+# ---------------------------------------------------------------------------
+# Pestaña: Comparación
+# ---------------------------------------------------------------------------
 
-    df = pd.DataFrame(data)
+def render_comparison_chart(matrix: dict, vf_current: float) -> None:
+    rows = []
+    for name in material_db.list_fibers():
+        fiber = material_db.get_fiber(name)
+        if not fiber:
+            continue
+        elastic = elastic_from_props(fiber, matrix, vf_current)
+        strength = strength_from_props(fiber, matrix, vf_current)
+        rows.append({
+            "Fibra": name,
+            "E1 (GPa)": round(elastic["E1"], 1),
+            "E2 (GPa)": round(elastic["E2"], 1),
+            "G12 (GPa)": round(elastic["G12"], 1),
+            "F1t (MPa)": round(strength["F1t"], 1),
+        })
+
+    dataframe = pd.DataFrame(rows)
+    if dataframe.empty:
+        st.info("Agregue fibras a la base de datos para comparar.")
+        return
+
     col1, col2 = st.columns(2)
-
     with col1:
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=df["name"], y=df["E1"], name="E1", marker_color=CYAN))
-        fig.add_trace(go.Bar(x=df["name"], y=df["E2"], name="E2", marker_color=GREEN))
-        fig.add_trace(go.Bar(x=df["name"], y=df["G12"], name="G12", marker_color=ORANGE))
-        fig.update_layout(**PLOTLY_LAYOUT, title="Módulos Elásticos — Comparación de Fibras (Vf actual)", barmode="group",
-                          yaxis_title="Módulo [GPa]")
+        fig.add_trace(go.Bar(x=dataframe["Fibra"], y=dataframe["E1 (GPa)"], name="E₁", marker_color=ACCENT))
+        fig.add_trace(go.Bar(x=dataframe["Fibra"], y=dataframe["E2 (GPa)"], name="E₂", marker_color=OCHRE))
+        fig.add_trace(go.Bar(x=dataframe["Fibra"], y=dataframe["G12 (GPa)"], name="G₁₂", marker_color=OLIVE))
+        fig.update_layout(**PLOTLY_LAYOUT, title="Módulos elásticos — comparación de fibras", barmode="group",
+                          yaxis_title="E [GPa]")
         st.plotly_chart(fig, width="stretch")
 
     with col2:
         fig2 = go.Figure()
-        fig2.add_trace(go.Bar(x=df["name"], y=df["F1t"], name="F1t", marker_color=CYAN))
-        fig2.update_layout(**PLOTLY_LAYOUT, title="Resistencia Longitudinal F1t — Comparación", yaxis_title="F1t [MPa]")
+        fig2.add_trace(go.Bar(x=dataframe["Fibra"], y=dataframe["F1t (MPa)"], name="F₁ₜ", marker_color=RUST))
+        fig2.update_layout(**PLOTLY_LAYOUT, title="Resistencia longitudinal F₁ₜ", yaxis_title="F₁ₜ [MPa]")
         st.plotly_chart(fig2, width="stretch")

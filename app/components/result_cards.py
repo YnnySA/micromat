@@ -1,51 +1,40 @@
 # Implements: specs/SPEC-UI-01-REDISENO VISUAL.md
-"""Componente para mostrar tarjetas de resultados."""
+# Implements: specs/08-interfaz-vintage-unificada.md
+"""Tarjetas de resultados nativas (Streamlit puro, sin HTML ni CSS).
+
+Se usa `st.container(border=True)` con `st.caption` + `st.markdown` en lugar de
+`st.metric`, cuyo valor (~2 rem) se truncaba en 5 columnas.
+"""
 
 import streamlit as st
-from styles.theme import CYAN, GREEN, ORANGE, PURPLE, RED, GRAY
 
-def render_result_cards(props: dict):
-    # Fila 1: Elásticas
-    cols1 = st.columns(5)
-    cards_elastic = [
-        ("E1",   props["E1"],   "GPa", CYAN),
-        ("E2",   props["E2"],   "GPa", GREEN),
-        ("G12",  props["G12"],  "GPa", ORANGE),
-        ("nu12", props["nu12"], "",    PURPLE),
-        ("nu21", props["nu21"], "",    GRAY),
-    ]
-    for col, (label, value, unit, color) in zip(cols1, cards_elastic):
-        with col:
-            decimals = 4 if label in ("nu12", "nu21") else 2
-            st.markdown(f'''
-            <div style="background:#111827; border:1px solid #1e3a5f; border-top:2px solid {color};
-                        border-radius:6px; padding:12px 10px; text-align:center; margin-bottom:8px;">
-              <div style="color:#4a6080;font-size:9px;letter-spacing:0.1em;margin-bottom:4px;">{label}</div>
-              <div style="color:{color};font-size:18px;font-weight:600;font-family:'JetBrains Mono',monospace;">
-                {value:.{decimals}f}
-              </div>
-              <div style="color:#4a6080;font-size:9px;">{unit}</div>
-            </div>
-            ''', unsafe_allow_html=True)
 
-    # Fila 2: Resistencia
-    cols2 = st.columns(5)
-    cards_strength = [
-        ("F1t",  props["F1t"],  "MPa", CYAN),
-        ("F1c",  props["F1c"],  "MPa", RED),
-        ("F2t",  props["F2t"],  "MPa", GREEN),
-        ("F2c",  props["F2c"],  "MPa", PURPLE),
-        ("F12s", props["F12s"], "MPa", ORANGE),
+def render_result_cards(props: dict) -> None:
+    """Dos filas de 5 tarjetas: módulos elásticos y resistencias."""
+    elastic = [
+        ("E₁", props["E1"], "GPa", 2),
+        ("E₂", props["E2"], "GPa", 2),
+        ("G₁₂", props["G12"], "GPa", 2),
+        ("ν₁₂", props["nu12"], "", 4),
+        ("ν₂₁", props["nu21"], "", 4),
     ]
-    for col, (label, value, unit, color) in zip(cols2, cards_strength):
-        with col:
-            st.markdown(f'''
-            <div style="background:#111827; border:1px solid #1e3a5f; border-top:2px solid {color};
-                        border-radius:6px; padding:12px 10px; text-align:center; margin-bottom:8px;">
-              <div style="color:#4a6080;font-size:9px;letter-spacing:0.1em;margin-bottom:4px;">{label}</div>
-              <div style="color:{color};font-size:18px;font-weight:600;font-family:'JetBrains Mono',monospace;">
-                {value:.1f}
-              </div>
-              <div style="color:#4a6080;font-size:9px;">{unit}</div>
-            </div>
-            ''', unsafe_allow_html=True)
+    for column, (label, value, unit, decimals) in zip(st.columns(5), elastic):
+        _card(column, label, value, unit, decimals)
+
+    strength = [
+        ("F₁ₜ", props["F1t"], "MPa", 1),
+        ("F₁c", props["F1c"], "MPa", 1),
+        ("F₂ₜ", props["F2t"], "MPa", 1),
+        ("F₂c", props["F2c"], "MPa", 1),
+        ("F₆", props["F6"], "MPa", 1),
+    ]
+    for column, (label, value, unit, decimals) in zip(st.columns(5), strength):
+        _card(column, label, value, unit, decimals)
+
+
+def _card(column, label: str, value: float, unit: str, decimals: int) -> None:
+    heading = f"{label} ({unit})" if unit else label
+    with column:
+        with st.container(border=True):
+            st.caption(heading)
+            st.markdown(f"**{value:.{decimals}f}**")

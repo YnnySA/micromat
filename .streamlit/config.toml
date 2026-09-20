@@ -1,0 +1,31 @@
+# Implements: specs/08-interfaz-vintage-unificada.md
+# Tema claro tipo papel sepia, tipografía monoespaciada, sin CSS inyectado.
+[theme]
+base = "light"
+primaryColor = "#1f6f6b"
+backgroundColor = "#f4ecd8"
+secondaryBackgroundColor = "#e8ddc0"
+codeBackgroundColor = "#e8ddc0"
+textColor = "#3d3428"
+linkColor = "#1f6f6b"
+borderColor = "#c9bb98"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "4px"
+buttonRadius = "4px"
+font = "monospace"
+codeFont = "monospace"
+codeFontSize = "0.875rem"
+codeTextColor = "#3d3428"
+baseFontSize = 14
+baseFontWeight = 400
+headingFontSizes = ["28px", "22px", "18px", "16px", "14px", "12px"]
+headingFontWeights = [600, 600, 600, 500, 500, 500]
+linkUnderline = false
+chartCategoricalColors = ["#1f6f6b", "#b07d2b", "#5c6b3c", "#a04b3a", "#6b5b95", "#3d6b8a", "#8a6d3b"]
+
+[theme.sidebar]
+backgroundColor = "#ece1c6"
+secondaryBackgroundColor = "#f4ecd8"
+codeBackgroundColor = "#f4ecd8"
+borderColor = "#c9bb98"
