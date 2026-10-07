@@ -47,12 +47,11 @@ def validation_dataframe(rows: list[ValidationRow]) -> pd.DataFrame:
         [
             {
                 "Propiedad": row.property_name,
-                "Predicho": row.predicted,
+                "Calculado": row.predicted,
                 "Experimental": row.experimental,
                 "Error %": row.error_percent,
                 "Unidad": row.unit,
                 "Modelo": row.model,
-                "_highlight": row.exceeds_twenty_percent,
             }
             for row in rows
         ]
@@ -86,14 +85,37 @@ def render_strength_table(properties: StrengthProperties) -> None:
 
 def render_validation_table(rows: list[ValidationRow]) -> None:
     dataframe = validation_dataframe(rows)
-    styled = dataframe.style.apply(_highlight_validation, axis=1)
     st.dataframe(
-        styled,
+        dataframe,
         hide_index=True,
         column_config={
-            "Predicho": st.column_config.NumberColumn("Predicho", format="%.3f"),
+            "Calculado": st.column_config.NumberColumn("Calculado", format="%.3f"),
             "Experimental": st.column_config.NumberColumn("Experimental", format="%.3f"),
             "Error %": st.column_config.NumberColumn("Error %", format="%.2f%%"),
-            "_highlight": None,
         },
     )
+
+
+def render_validation_editor(
+    rows: list[ValidationRow],
+    key: str,
+) -> pd.DataFrame:
+    """Permite editar referencias experimentales con navegación por celdas."""
+    dataframe = validation_dataframe(rows)
+    edited = st.data_editor(
+        dataframe,
+        hide_index=True,
+        width="stretch",
+        key=key,
+        disabled=["Propiedad", "Calculado", "Error %", "Unidad", "Modelo"],
+        column_config={
+            "Calculado": st.column_config.NumberColumn("Calculado", format="%.3f"),
+            "Experimental": st.column_config.NumberColumn(
+                "Experimental",
+                format="%.3f",
+                help="Valor de referencia experimental editable.",
+            ),
+            "Error %": st.column_config.NumberColumn("Error %", format="%.2f%%"),
+        },
+    )
+    return edited

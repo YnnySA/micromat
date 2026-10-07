@@ -145,30 +145,50 @@ def strength_properties(material: MaterialSystem, vf: float | None = None) -> St
 def validation_rows(material: MaterialSystem) -> list[ValidationRow]:
     elastic = elastic_properties(material)
     strengths = strength_properties(material)
+    return validation_rows_from_props(
+        {
+            "E1": elastic.e1_gpa,
+            "E2": elastic.e2_gpa,
+            "G12": elastic.g12_gpa,
+            "nu12": elastic.nu12,
+        },
+        {
+            "F1t": strengths.f1t.value_mpa,
+            "F1c": strengths.f1c.value_mpa,
+            "F2t": strengths.f2t.value_mpa,
+            "F2c": strengths.f2c.value_mpa,
+            "F6": strengths.f6.value_mpa,
+        },
+        material.experimental,
+    )
+
+
+def validation_rows_from_props(
+    elastic: dict[str, float],
+    strength: dict[str, float],
+    experimental: dict[str, float],
+) -> list[ValidationRow]:
+    """Construye filas de validación para el sistema seleccionado."""
     predicted = {
-        "E1": (elastic.e1_gpa, "GPa", "ROM"),
-        "E2": (elastic.e2_gpa, "GPa", "Halpin-Tsai"),
-        "G12": (elastic.g12_gpa, "GPa", "Halpin-Tsai"),
-        "nu12": (elastic.nu12, "adimensional", "ROM"),
-        "F1t": (strengths.f1t.value_mpa, "MPa", strengths.f1t.model),
-        "F1c": (strengths.f1c.value_mpa, "MPa", strengths.f1c.model),
-        "F2t": (strengths.f2t.value_mpa, "MPa", strengths.f2t.model),
-        "F2c": (strengths.f2c.value_mpa, "MPa", strengths.f2c.model),
-        "F6": (strengths.f6.value_mpa, "MPa", strengths.f6.model),
+        "E1": (elastic["E1"], "GPa", "ROM"),
+        "E2": (elastic["E2"], "GPa", "Halpin-Tsai"),
+        "G12": (elastic["G12"], "GPa", "Halpin-Tsai"),
+        "nu12": (elastic["nu12"], "adimensional", "ROM"),
+        "F1t": (strength["F1t"], "MPa", "ROM con dominancia de fibra"),
+        "F1c": (strength["F1c"], "MPa", "Estimación práctica 0.575 × F1t"),
+        "F2t": (strength["F2t"], "MPa", "Barbero"),
+        "F2c": (strength["F2c"], "MPa", "Estimación empírica 4.0 × F2t"),
+        "F6": (strength["F6"], "MPa", "Barbero"),
     }
     rows = []
-    for name, experimental in material.experimental.items():
+    for name, experimental_value in experimental.items():
         value, unit, model = predicted[name]
-        rows.append(
-            ValidationRow(
-                name,
-                value,
-                experimental,
-                abs(value - experimental) / experimental * 100.0,
-                unit,
-                model,
-            )
+        error = (
+            abs(value - experimental_value) / experimental_value * 100.0
+            if experimental_value
+            else 0.0
         )
+        rows.append(ValidationRow(name, value, experimental_value, error, unit, model))
     return rows
 
 

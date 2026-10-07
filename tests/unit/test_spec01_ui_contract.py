@@ -32,7 +32,7 @@ def test_strength_properties_table():
 
 def test_validation_table():
     dataframe = validation_dataframe(validation_rows(MATERIALS["IM7/8552 (CFRP)"]))
-    assert {"Propiedad", "Predicho", "Experimental", "Error %"}.issubset(dataframe.columns)
+    assert {"Propiedad", "Calculado", "Experimental", "Error %"}.issubset(dataframe.columns)
     assert dataframe.loc[dataframe["Propiedad"] == "E1", "Error %"].iloc[0] > 2.0
 
 
