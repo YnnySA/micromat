@@ -45,7 +45,7 @@ def render_results_page() -> None:
         render_elastic_chart(fiber_props, matrix_props, vf)
 
     with tab_strength:
-        render_strength_chart(fiber_props, matrix_props, vf)
+        render_strength_chart(fiber_props, matrix_props, vf, fiber_name, matrix_name)
 
     with tab_rve:
         render_rve_tab(fiber_props, matrix_props, vf)
