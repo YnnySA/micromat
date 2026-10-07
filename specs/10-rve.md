@@ -14,7 +14,7 @@ respetando un Vf objetivo que nunca se supera.
 
 ## Alcance
 
-- Pestaña "RVE" con controles de tamaño de celda y regeneración (semilla).
+- Pestaña "RVE" con controles de tamaño de celda, semilla editable y regeneración.
 - Fibra y matriz tomadas de la selección del sidebar; el Vf objetivo es el slider.
 - Diámetros de fibra `d_min`/`d_max` (µm) por fibra, almacenados en SQLite.
 - Motor `core/rve.py`: celda periódica, mínima-imagen, sin Streamlit.
@@ -27,8 +27,13 @@ respetando un Vf objetivo que nunca se supera.
 - `Vf_logrado ≤ Vf_objetivo`, y lo más cercano posible al objetivo.
 - Vf máximo práctico para el RVE: 0.65; si el slider lo supera, se informa.
 - Colocación por compresión/relajación (alcanza ~0.60 donde RSA se estanca en ~0.547).
+- Uniformización periódica posterior para reducir agrupamientos y zonas vacías sin
+  permitir solapes.
 - Diámetros dentro del rango `[d_min, d_max]` (se admite un escalado leve).
 - Resultado determinista para una misma semilla.
+- La semilla no representa una propiedad física: identifica una realización
+  pseudoaleatoria reproducible. “Nueva realización” la incrementa para explorar
+  otra distribución con los mismos parámetros.
 
 ## Criterios de aceptación
 
@@ -40,3 +45,4 @@ respetando un Vf objetivo que nunca se supera.
 | AC-10-04 | Misma semilla produce el mismo RVE | `test_rve_deterministic` |
 | AC-10-05 | El Vf objetivo no supera el máximo práctico | `test_vf_cap` |
 | AC-10-06 | El dibujo incluye copias que cruzan los bordes | `test_polygons_cross_boundary` |
+| AC-10-07 | La uniformización reduce agrupamientos manteniendo la periodicidad y el no-solape | `test_rve_uniform_distribution` |

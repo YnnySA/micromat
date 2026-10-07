@@ -74,12 +74,24 @@ def _max_solape(centros: np.ndarray, radios: np.ndarray, lado: float) -> float:
     return float(np.max(solape)) if solape.size else -math.inf
 
 
-def _relajar(centros: np.ndarray, radios: np.ndarray, lado: float,
-             max_iter: int = 200, tol: float = TOL_SOLAPE, factor: float = 0.5,
-             rng: np.random.Generator | None = None) -> tuple[np.ndarray, int]:
-    """Empuja los pares solapados hasta separarlos (mínima-imagen periódica)."""
+def _relajar(
+    centros: np.ndarray,
+    radios: np.ndarray,
+    lado: float,
+    max_iter: int = 200,
+    tol: float = TOL_SOLAPE,
+    factor: float = 0.5,
+    rng: np.random.Generator | None = None,
+    separacion_extra: float = 0.0,
+) -> tuple[np.ndarray, int]:
+    """Separa pares cercanos usando la distancia mínima-imagen periódica.
+
+    ``separacion_extra`` activa una repulsión suave entre fibras que no se
+    solapan, reduciendo agrupamientos y zonas vacías en la representación.
+    """
     suma = radios[:, None] + radios[None, :]
     escala_cap = 0.5 * float(np.min(radios)) if radios.size else 0.1
+    distancia_objetivo = suma + float(max(0.0, separacion_extra))
     for iteration in range(max_iter):
         diff = centros[:, None, :] - centros[None, :, :]
         dx = diff[:, :, 0].copy()
@@ -88,7 +100,7 @@ def _relajar(centros: np.ndarray, radios: np.ndarray, lado: float,
         dy = dy - lado * np.round(dy / lado)
         dist = np.hypot(dx, dy)
         np.fill_diagonal(dist, np.inf)
-        solape = np.where(np.isfinite(suma - dist), suma - dist, 0.0)
+        solape = np.where(np.isfinite(distancia_objetivo - dist), distancia_objetivo - dist, 0.0)
         mask = solape > tol
         if not mask.any():
             return centros, iteration
@@ -139,6 +151,16 @@ def _intentar(vf: float, lado: float, d_min: float, d_max: float,
         iteraciones += its
 
     centros = centros % lado
+    centros, its = _relajar(
+        centros,
+        radios,
+        lado,
+        max_iter=260,
+        factor=0.22,
+        rng=rng,
+        separacion_extra=0.18 * float(np.mean(radios)),
+    )
+    iteraciones += its
     if _max_solape(centros, radios, lado) > TOL_SOLAPE:
         centros, its = _relajar(centros, radios, lado, max_iter=800, rng=rng)
         iteraciones += its
