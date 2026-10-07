@@ -13,5 +13,5 @@ def render_header(fiber_name: str, matrix_name: str, vf: float) -> None:
         st.badge("v1.0")
     st.caption(
         f"PROPIEDADES CALCULADAS — Vf = {vf:.0%} · {fiber_name} / {matrix_name}"
-        "   |   Halpin-Tsai · Regla de Mezclas · Tsai-Wu"
+        "   |   El modelo aplicado se indica en cada propiedad"
     )
