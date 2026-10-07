@@ -15,6 +15,7 @@ from components.charts import (
 from components.theory_tab import render_theory_tab
 from components.rve_view import render_rve_tab
 from components.results_tables import render_validation_editor
+from components.design_case import render_design_case_tab
 from core.calculations import validation_rows_from_props
 from core.micromechanics import (
     elastic_properties_from_sidebar,
@@ -35,8 +36,8 @@ def render_results_page() -> None:
     render_result_cards({**elastic, **strength})
 
     # 4. Pestañas
-    tab_elastic, tab_strength, tab_rve, tab_validation, tab_theory = st.tabs(
-        ["Módulos Elásticos", "Resistencias", "RVE", "Validación", "Teoría"]
+    tab_elastic, tab_strength, tab_rve, tab_validation, tab_design, tab_theory = st.tabs(
+        ["Módulos Elásticos", "Resistencias", "RVE", "Validación", "Caso práctico", "Teoría"]
     )
 
     with tab_elastic:
@@ -79,6 +80,9 @@ def render_results_page() -> None:
         if edited_experimental != experimental:
             st.session_state[state_key] = edited_experimental
             st.rerun()
+
+    with tab_design:
+        render_design_case_tab()
 
     with tab_theory:
         render_theory_tab()
