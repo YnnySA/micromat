@@ -29,7 +29,7 @@
 - [Arquitectura](#-arquitectura)
 - [Modelos micromecánicos](#-modelos-micromecánicos)
 - [Base de datos de materiales (SQLite)](#-base-de-datos-de-materiales-sqlite)
-- [RVE realista (celda periódica)](#-rve-realista-celda-periódica)
+- [RVE geométricamente periódico](#-rve-geométricamente-periódico)
 - [Instalación](#-instalación)
 - [Ejecución](#-ejecución)
 - [Uso de la aplicación](#-uso-de-la-aplicación)
@@ -59,8 +59,10 @@ A partir de las propiedades de los constituyentes (fibra y matriz) y de la fracc
 | 🎛️ | **Panel lateral persistente** | `Vf`, selección de fibra/matriz desde base de datos y edición de propiedades |
 | 🗂️ | **Base de datos editable** | Fibras y matrices en **SQLite** (insertar, guardar, editar, eliminar) |
 | 🧮 | **Cálculo unificado** | Una sola capa física (`core/calculations.py`), idéntica al notebook del curso |
-| 📊 | **7 pestañas analíticas** | Módulos · Resistencias · RVE · Off-Axis · Envolvente · Comparación · Teoría |
-| 🧩 | **RVE realista** | Celda periódica: las fibras cruzan los bordes y reaparecen; `Vf` exacto y sin superar el objetivo |
+| 📊 | **6 pestañas analíticas** | Módulos · Resistencias · RVE · Validación · Caso práctico · Teoría |
+| 🧩 | **RVE geométricamente periódico** | Copias periódicas, distancia mínima-imagen, sin solapes y `Vf` logrado ≤ objetivo |
+| 📋 | **Validación editable** | Referencias experimentales editables para el compuesto seleccionado |
+| 🚲 | **Caso práctico de diseño inverso** | Requisitos editables, `Vf` mínimo, comparación de rigidez específica y gráfico de cumplimiento |
 | 📐 | **Etiquetas en notación de ingeniería** | `E₁, ν₁₂, σ₁, θ…` renderizadas de forma nativa |
 | 📚 | **Pestaña de Teoría** | Conceptos y fórmulas del curso (U1 + U2) con `st.latex` (KaTeX offline) |
 | 🎨 | **Tema claro "papel sepia"** | Tipografía monoespaciada, paleta sobria y sin CSS/HTML inyectado |
@@ -92,10 +94,9 @@ flowchart LR
     TABS --> T1["Módulos Elásticos"]
     TABS --> T2["Resistencias"]
     TABS --> T3["RVE"]
-    TABS --> T4["Off-Axis Eₓ(θ)"]
-    TABS --> T5["Envolvente Tsai-Wu"]
-    TABS --> T6["Comparación"]
-    TABS --> T7["Teoría"]
+    TABS --> T4["Validación editable"]
+    TABS --> T5["Caso práctico"]
+    TABS --> T6["Teoría"]
 ```
 
 > 💡 **Sugerencia:** agrega capturas reales en `docs/` y enlázalas aquí.
@@ -120,6 +121,7 @@ flowchart TD
     B --> F["components/charts.py"]
     B --> G["components/rve_view.py"]
     B --> H["components/theory_tab.py"]
+    B --> I["components/design_case.py"]
 
     C --> DB[("🗄️ data/materials.db<br/>SQLite")]
     F --> CALC["core/calculations.py"]
@@ -148,7 +150,9 @@ proyecto01/
 │   │   ├── header.py
 │   │   ├── result_cards.py
 │   │   ├── charts.py
-│   │   ├── rve_view.py
+│   │   ├── rve_view.py             # Visualización de la celda periódica
+│   │   ├── results_tables.py       # Tablas y editor de validación
+│   │   └── design_case.py          # Caso práctico de diseño inverso
 │   │   └── theory_tab.py
 │   ├── pages/
 │   │   └── resultados.py       # Página activa
@@ -222,17 +226,19 @@ Base ligera en `data/materials.db` (biblioteca estándar `sqlite3`, **sin depend
 
 ---
 
-## 🧩 RVE realista (celda periódica)
+## 🧩 RVE geométricamente periódico
 
-El **RVE** (*Representative Volume Element*) es la región más pequeña que conserva las proporciones de fibra y matriz. En lugar de mantener las fibras dentro del marco (como en una visualización simplificada), aquí se modela como **celda periódica**:
+El **RVE** (*Representative Volume Element*) es la región más pequeña que conserva las proporciones de fibra y matriz. La aplicación lo representa como una **celda geométricamente periódica**:
 
-- 🔁 Las fibras **cruzan los bordes y reaparecen por el borde opuesto**.
-- 🎯 La fracción volumétrica es exacta: $V_f = \sum \pi r_i^2 / L^{2}$ (el área de cada fibra se cuenta una sola vez).
-- 📏 Sin solapes, verificado con la **distancia mínima-imagen**.
+- 🔁 Cada fibra tiene copias trasladadas en ±`L` y, cuando cruza un borde, reaparece por el borde opuesto.
+- 🎯 La fracción volumétrica se calcula como `Vf = Σ π rᵢ² / L²`; cada fibra base se cuenta una sola vez y el valor logrado no supera el objetivo.
+- 📏 La no-superposición se verifica con la **distancia mínima-imagen**, considerando las copias periódicas de la celda.
 - 🧱 Colocación por **relajación/compresión** (estilo Lubachevsky–Stillinger), que alcanza densidades altas (~0.60) donde el RSA se estanca (~0.547).
 - 🔒 El **Vf objetivo nunca se supera**; si no es alcanzable, se reporta el máximo factible.
 
-Parámetros por defecto: **RVE 50 × 50 µm**, diámetro IM7 5–7 µm, E-glass 13–17 µm (según la directriz de la Tarea 1).
+La periodicidad verificada aquí es **geométrica y topológica para la representación 2D**. El código no resuelve todavía un problema de elementos finitos con grados de libertad o tracciones periódicas; por tanto, no debe interpretarse como una validación de condiciones periódicas mecánicas. La pestaña permite editar la **semilla**: la misma semilla reproduce exactamente la misma realización y cambiarla genera otra distribución aleatoria con igual objetivo de `Vf`.
+
+Parámetros por defecto: **RVE 50 × 50 µm**, diámetro IM7 5–7 µm y E-glass 13–17 µm (según la directriz de la Tarea 1). La realización es determinista para una semilla fija y puede regenerarse desde la pestaña RVE.
 
 ---
 
@@ -245,12 +251,11 @@ Requisitos: **Python 3.12+**.
 git clone <URL-del-repositorio>
 cd proyecto01
 
-# 2. Crear y activar el entorno virtual
-python -m venv venv
-# Windows (PowerShell):
-venv\Scripts\Activate.ps1
-# Linux / macOS:
-source venv/bin/activate
+# 2. Activar el entorno virtual existente en la raíz del workspace
+# Windows (PowerShell, desde proyecto01/):
+..\venv\Scripts\Activate.ps1
+# Linux / macOS, desde proyecto01/:
+source ../venv/bin/activate
 
 # 3. Instalar dependencias
 pip install -r requirements.txt
@@ -284,11 +289,10 @@ Luego abre 👉 **http://localhost:8501**
 | Pestaña | Qué muestra |
 |---|---|
 | **Módulos Elásticos** | `E₁, E₂, G₁₂` y `ν₁₂` vs `Vf` |
-| **Resistencias** | `F₁ₜ, F₁c` y `F₂ₜ, F₂c, F₆` vs `Vf` |
-| **RVE** | Sección transversal periódica realista + verificación de `Vf` |
-| **Off-Axis** | `Eₓ(θ)` y valores destacados (0°–90°) |
-| **Envolvente** | Criterio de fallo Tsai-Wu en el plano `σ₁–σ₂` |
-| **Comparación** | Módulos y `F₁ₜ` de todas las fibras del catálogo |
+| **Resistencias** | `F₁ₜ` y `F₁c` vs `Vf` para la fibra y matriz seleccionadas |
+| **RVE** | Celda 2D geométricamente periódica, copias de borde, `Vf` y no-superposición |
+| **Validación** | Tabla del sistema seleccionado; valores experimentales editables y error porcentual |
+| **Caso práctico** | Diseño inverso del tubo de bicicleta: `E₁`, `F₁ₜ`, `Vf` mínimo y `E₁/ρ` |
 | **Teoría** | Conceptos y fórmulas del curso (U1 + U2) |
 
 ---
@@ -317,7 +321,7 @@ Desde la carpeta `proyecto01/`:
 - **Paramétrico / inverso** (`test_spec04`, `test_spec05`).
 - **Base de materiales** (`test_spec07_material_db.py`): CRUD y semilla.
 - **UI nativa** (`test_spec08_ui_native.py`): sin `unsafe_allow_html`, tema, etiquetas sin MathJax.
-- **RVE** (`test_spec10_rve.py`): sin solapes periódicos, `Vf ≤ objetivo`, determinismo.
+- **RVE** (`test_spec10_rve.py`): sin solapes periódicos, `Vf ≤ objetivo`, determinismo y copias que cruzan los bordes.
 
 </details>
 
@@ -338,7 +342,7 @@ Cada archivo declara su contrato con un encabezado `# Implements: specs/<archivo
 | `07-base-materiales.md` | Base de datos SQLite |
 | `08-interfaz-vintage-unificada.md` | Interfaz nativa, tema sepia y cálculos unificados |
 | `09-teoria-curso.md` | Pestaña de teoría (U1 + U2) |
-| `10-rve.md` | RVE realista (celda periódica) |
+| `10-rve.md` | RVE geométricamente periódico (celda 2D) |
 
 ---
 
@@ -363,13 +367,11 @@ Cada archivo declara su contrato con un encabezado `# Implements: specs/<archivo
 ```bash
 # 1. Verifica el estado y qué se subirá
 git status
-git add .
-git commit -m "feat: micromecánica UD con RVE periódico, base SQLite y tema nativo"
+git add README.md app/ tests/
+git commit -m "docs: update application documentation"
 
-# 2. Crea el repositorio remoto y sube
-git branch -M main
-git remote add origin <URL-del-repositorio>
-git push -u origin main
+# 2. Publica una rama de trabajo y abre el Pull Request en GitHub
+git push -u origin feat/yenny
 ```
 
 **Recomendaciones**

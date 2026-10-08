@@ -145,30 +145,50 @@ def strength_properties(material: MaterialSystem, vf: float | None = None) -> St
 def validation_rows(material: MaterialSystem) -> list[ValidationRow]:
     elastic = elastic_properties(material)
     strengths = strength_properties(material)
+    return validation_rows_from_props(
+        {
+            "E1": elastic.e1_gpa,
+            "E2": elastic.e2_gpa,
+            "G12": elastic.g12_gpa,
+            "nu12": elastic.nu12,
+        },
+        {
+            "F1t": strengths.f1t.value_mpa,
+            "F1c": strengths.f1c.value_mpa,
+            "F2t": strengths.f2t.value_mpa,
+            "F2c": strengths.f2c.value_mpa,
+            "F6": strengths.f6.value_mpa,
+        },
+        material.experimental,
+    )
+
+
+def validation_rows_from_props(
+    elastic: dict[str, float],
+    strength: dict[str, float],
+    experimental: dict[str, float],
+) -> list[ValidationRow]:
+    """Construye filas de validación para el sistema seleccionado."""
     predicted = {
-        "E1": (elastic.e1_gpa, "GPa", "ROM"),
-        "E2": (elastic.e2_gpa, "GPa", "Halpin-Tsai"),
-        "G12": (elastic.g12_gpa, "GPa", "Halpin-Tsai"),
-        "nu12": (elastic.nu12, "adimensional", "ROM"),
-        "F1t": (strengths.f1t.value_mpa, "MPa", strengths.f1t.model),
-        "F1c": (strengths.f1c.value_mpa, "MPa", strengths.f1c.model),
-        "F2t": (strengths.f2t.value_mpa, "MPa", strengths.f2t.model),
-        "F2c": (strengths.f2c.value_mpa, "MPa", strengths.f2c.model),
-        "F6": (strengths.f6.value_mpa, "MPa", strengths.f6.model),
+        "E1": (elastic["E1"], "GPa", "ROM"),
+        "E2": (elastic["E2"], "GPa", "Halpin-Tsai"),
+        "G12": (elastic["G12"], "GPa", "Halpin-Tsai"),
+        "nu12": (elastic["nu12"], "adimensional", "ROM"),
+        "F1t": (strength["F1t"], "MPa", "ROM con dominancia de fibra"),
+        "F1c": (strength["F1c"], "MPa", "Estimación práctica 0.575 × F1t"),
+        "F2t": (strength["F2t"], "MPa", "Barbero"),
+        "F2c": (strength["F2c"], "MPa", "Estimación empírica 4.0 × F2t"),
+        "F6": (strength["F6"], "MPa", "Barbero"),
     }
     rows = []
-    for name, experimental in material.experimental.items():
+    for name, experimental_value in experimental.items():
         value, unit, model = predicted[name]
-        rows.append(
-            ValidationRow(
-                name,
-                value,
-                experimental,
-                abs(value - experimental) / experimental * 100.0,
-                unit,
-                model,
-            )
+        error = (
+            abs(value - experimental_value) / experimental_value * 100.0
+            if experimental_value
+            else 0.0
         )
+        rows.append(ValidationRow(name, value, experimental_value, error, unit, model))
     return rows
 
 
@@ -250,33 +270,66 @@ def optimal_vf(material: MaterialSystem, vf_min: float, vf_max: float, steps: in
 # SPEC-05: diseño inverso
 # ---------------------------------------------------------------------------
 
-def inverse_design_search(material: MaterialSystem, e1_req_mpa: float, f1t_req_mpa: float, vf_max: float) -> DesignResult:
+def inverse_design_sweep(
+    material: MaterialSystem,
+    e1_req_mpa: float,
+    f1t_req_mpa: float,
+    vf_max: float,
+    steps: int = 6500,
+) -> dict[str, Any]:
+    """Evalúa el caso práctico de diseño inverso sobre un barrido fino de Vf."""
     import numpy as np
 
-    vfs = np.linspace(0.01, vf_max, 6500)
+    vfs = np.linspace(0.01, vf_max, steps)
+    elastic = [elastic_properties(material, float(vf)) for vf in vfs]
+    strengths = [strength_properties(material, float(vf)) for vf in vfs]
+    e1_mpa = np.array([props.e1_gpa * 1000.0 for props in elastic])
+    f1t_mpa = np.array([props.f1t.value_mpa for props in strengths])
+    density = (
+        vfs * material.fiber["density"]
+        + (1.0 - vfs) * material.matrix["density"]
+    )
+    feasible = (e1_mpa >= e1_req_mpa) & (f1t_mpa >= f1t_req_mpa)
+    first_index = int(np.argmax(feasible)) if feasible.any() else None
 
-    for vf in vfs:
-        elastic = elastic_properties(material, vf)
-        strengths = strength_properties(material, vf)
+    return {
+        "vf": vfs,
+        "e1_mpa": e1_mpa,
+        "f1t_mpa": f1t_mpa,
+        "density": density,
+        "feasible": feasible,
+        "first_index": first_index,
+    }
 
-        e1_mpa = elastic.e1_gpa * 1000.0
 
-        if e1_mpa >= e1_req_mpa and strengths.f1t.value_mpa >= f1t_req_mpa:
-            density = vf * material.fiber["density"] + (1.0 - vf) * material.matrix["density"]
-            specific_stiffness = e1_mpa / density
+def inverse_design_search(
+    material: MaterialSystem,
+    e1_req_mpa: float,
+    f1t_req_mpa: float,
+    vf_max: float,
+) -> DesignResult:
+    sweep = inverse_design_sweep(material, e1_req_mpa, f1t_req_mpa, vf_max)
+    idx = sweep["first_index"]
 
-            e1_margin = e1_mpa - e1_req_mpa
-            f1t_margin = strengths.f1t.value_mpa - f1t_req_mpa
-            active = "E1" if e1_margin < f1t_margin else "F1t"
+    if idx is not None:
+        vf = float(sweep["vf"][idx])
+        e1_mpa = float(sweep["e1_mpa"][idx])
+        f1t_mpa = float(sweep["f1t_mpa"][idx])
+        density = float(sweep["density"][idx])
+        specific_stiffness = e1_mpa / density
 
-            return DesignResult(
-                factible=True,
-                vf_min=float(vf),
-                e1_at_vf=float(e1_mpa),
-                f1t_at_vf=float(strengths.f1t.value_mpa),
-                density=float(density),
-                specific_stiffness=float(specific_stiffness),
-                active_constraint=active,
-            )
+        e1_margin = e1_mpa / e1_req_mpa - 1.0
+        f1t_margin = f1t_mpa / f1t_req_mpa - 1.0
+        active = "E1" if e1_margin < f1t_margin else "F1t"
+
+        return DesignResult(
+            factible=True,
+            vf_min=vf,
+            e1_at_vf=e1_mpa,
+            f1t_at_vf=f1t_mpa,
+            density=density,
+            specific_stiffness=specific_stiffness,
+            active_constraint=active,
+        )
 
     return DesignResult(factible=False)
