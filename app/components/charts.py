@@ -14,7 +14,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core.calculations import elastic_from_props, offAxisStiffness, strength_from_props
+from core.calculations import (
+    MATERIALS,
+    elastic_from_props,
+    offAxisStiffness,
+    parametric_sweep,
+    strength_from_props,
+)
 from core import material_db
 
 # Paleta reducida y clara (papel sepia, tinta, un acento y apoyos apagados)
@@ -47,7 +53,9 @@ PLOTLY_LAYOUT = dict(
     height=380,
 )
 
-VF_SWEEP: tuple[float, ...] = tuple(round(v, 2) for v in np.arange(0.05, 0.801, 0.01))
+VF_SWEEP: tuple[float, ...] = tuple(round(v, 3) for v in np.linspace(0.30, 0.65, 200))
+VF_REF_IM7 = MATERIALS["IM7/8552 (CFRP)"].vf_reference
+VF_REF_EGLASS = MATERIALS["E-glass/Epoxi (GFRP)"].vf_reference
 
 
 @st.cache_data(show_spinner=False)
@@ -58,6 +66,12 @@ def _elastic_sweep(fiber: dict, matrix: dict, vfs: tuple[float, ...]) -> dict[st
         for key in series:
             series[key].append(elastic[key])
     return series
+
+
+@st.cache_data(show_spinner=False)
+def _system_sweep(system_name: str, vf_min: float, vf_max: float) -> dict[str, list[float]]:
+    material = MATERIALS[system_name]
+    return parametric_sweep(material, vf_min, vf_max, steps=200)
 
 
 @st.cache_data(show_spinner=False)
@@ -74,59 +88,114 @@ def _reference_line(fig: go.Figure, vf_current: float) -> None:
     fig.add_vline(x=vf_current, line=dict(color=INK, width=1, dash="dash"))
 
 
+def _add_system_reference_lines(fig: go.Figure) -> None:
+    fig.add_vline(x=VF_REF_IM7, line=dict(color=INK, width=1, dash="dot"))
+    fig.add_vline(x=VF_REF_EGLASS, line=dict(color=VIOLET, width=1, dash="dot"))
+
+
 # ---------------------------------------------------------------------------
 # Pestaña: Módulos Elásticos
 # ---------------------------------------------------------------------------
 
 def render_elastic_chart(fiber: dict, matrix: dict, vf_current: float) -> None:
-    sweep = _elastic_sweep(fiber, matrix, VF_SWEEP)
+    sweep_im7 = _system_sweep("IM7/8552 (CFRP)", 0.30, 0.65)
+    sweep_eglass = _system_sweep("E-glass/Epoxi (GFRP)", 0.30, 0.65)
     col1, col2 = st.columns(2)
 
     with col1:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["E1"], name="E₁", line=dict(color=ACCENT, width=LINE_WIDTH)))
-        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["E2"], name="E₂", line=dict(color=OCHRE, width=LINE_WIDTH)))
-        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["G12"], name="G₁₂", line=dict(color=OLIVE, width=LINE_WIDTH)))
-        _reference_line(fig, vf_current)
-        fig.update_layout(**PLOTLY_LAYOUT, title="Módulos vs fracción de volumen",
-                          xaxis_title="Vf [-]", yaxis_title="E [GPa]")
+        fig.add_trace(go.Scatter(x=sweep_im7["vf"], y=sweep_im7["e1"], name="E₁ IM7/8552 (ROM)", line=dict(color=ACCENT, width=LINE_WIDTH)))
+        fig.add_trace(go.Scatter(x=sweep_eglass["vf"], y=sweep_eglass["e1"], name="E₁ E-glass/Epoxi (ROM)", line=dict(color=VIOLET, width=LINE_WIDTH, dash="dash")))
+        _add_system_reference_lines(fig)
+        fig.update_layout(**PLOTLY_LAYOUT, title="E₁ vs Vf (ROM)",
+                          xaxis_title="Vf [-]", yaxis_title="E₁ [GPa]")
         st.plotly_chart(fig, width="stretch")
 
     with col2:
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["nu12"], name="ν₁₂", line=dict(color=VIOLET, width=LINE_WIDTH)))
-        _reference_line(fig2, vf_current)
-        fig2.update_layout(**PLOTLY_LAYOUT, title="Coeficiente de Poisson ν₁₂ vs Vf",
-                           xaxis_title="Vf [-]", yaxis_title="ν₁₂ [-]")
-        st.plotly_chart(fig2, width="stretch")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=sweep_im7["vf"], y=sweep_im7["e2_rom"], name="E₂ IM7/8552 (ROM)", line=dict(color=OLIVE, width=LINE_WIDTH, dash="dot")))
+        fig.add_trace(go.Scatter(x=sweep_im7["vf"], y=sweep_im7["e2"], name="E₂ IM7/8552 (Halpin-Tsai)", line=dict(color=ACCENT, width=LINE_WIDTH)))
+        fig.add_trace(go.Scatter(x=sweep_eglass["vf"], y=sweep_eglass["e2_rom"], name="E₂ E-glass/Epoxi (ROM)", line=dict(color=OCHRE, width=LINE_WIDTH, dash="dot")))
+        fig.add_trace(go.Scatter(x=sweep_eglass["vf"], y=sweep_eglass["e2"], name="E₂ E-glass/Epoxi (Halpin-Tsai)", line=dict(color=VIOLET, width=LINE_WIDTH, dash="dash")))
+        _add_system_reference_lines(fig)
+        fig.update_layout(**PLOTLY_LAYOUT, title="E₂ vs Vf (ROM vs Halpin-Tsai)",
+                          xaxis_title="Vf [-]", yaxis_title="E₂ [GPa]")
+        st.plotly_chart(fig, width="stretch")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=sweep_im7["vf"],
+            y=sweep_im7["g12"],
+            name="G₁₂ IM7/8552 (Halpin-Tsai)",
+            line=dict(color=ACCENT, width=LINE_WIDTH),
+        ))
+        fig.add_trace(go.Scatter(
+            x=sweep_eglass["vf"],
+            y=sweep_eglass["g12"],
+            name="G₁₂ E-glass/Epoxi (Halpin-Tsai)",
+            line=dict(color=VIOLET, width=LINE_WIDTH, dash="dash"),
+        ))
+        _add_system_reference_lines(fig)
+        fig.update_layout(**PLOTLY_LAYOUT, title="G₁₂ vs Vf (Halpin-Tsai)",
+                          xaxis_title="Vf [-]", yaxis_title="G₁₂ [GPa]")
+        st.plotly_chart(fig, width="stretch")
+
+    with col2:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=sweep_im7["vf"],
+            y=sweep_im7["nu12"],
+            name="ν₁₂ IM7/8552 (ROM)",
+            line=dict(color=ACCENT, width=LINE_WIDTH),
+        ))
+        fig.add_trace(go.Scatter(
+            x=sweep_eglass["vf"],
+            y=sweep_eglass["nu12"],
+            name="ν₁₂ E-glass/Epoxi (ROM)",
+            line=dict(color=VIOLET, width=LINE_WIDTH, dash="dash"),
+        ))
+        _add_system_reference_lines(fig)
+        fig.update_layout(**PLOTLY_LAYOUT, title="ν₁₂ vs Vf (ROM)",
+                          xaxis_title="Vf [-]", yaxis_title="ν₁₂ [-]")
+        st.plotly_chart(fig, width="stretch")
 
 
 # ---------------------------------------------------------------------------
 # Pestaña: Resistencias
 # ---------------------------------------------------------------------------
 
-def render_strength_chart(fiber: dict, matrix: dict, vf_current: float) -> None:
+def render_strength_chart(
+    fiber: dict,
+    matrix: dict,
+    vf_current: float,
+    fiber_name: str = "IM7",
+    matrix_name: str = "8552",
+) -> None:
+    """Muestra F₁ₜ y F₁c para la fibra y matriz seleccionadas."""
     sweep = _strength_sweep(fiber, matrix, VF_SWEEP)
-    col1, col2 = st.columns(2)
-
-    with col1:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F1t"], name="F₁ₜ", line=dict(color=ACCENT, width=LINE_WIDTH)))
-        fig.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F1c"], name="F₁c", line=dict(color=RUST, width=LINE_WIDTH)))
-        _reference_line(fig, vf_current)
-        fig.update_layout(**PLOTLY_LAYOUT, title="Resistencias longitudinales vs Vf",
-                          xaxis_title="Vf [-]", yaxis_title="F [MPa]")
-        st.plotly_chart(fig, width="stretch")
-
-    with col2:
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F2t"], name="F₂ₜ", line=dict(color=OLIVE, width=LINE_WIDTH)))
-        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F2c"], name="F₂c", line=dict(color=OCHRE, width=LINE_WIDTH)))
-        fig2.add_trace(go.Scatter(x=VF_SWEEP, y=sweep["F6"], name="F₆", line=dict(color=VIOLET, width=LINE_WIDTH)))
-        _reference_line(fig2, vf_current)
-        fig2.update_layout(**PLOTLY_LAYOUT, title="Resistencias transversales y cortante vs Vf",
-                           xaxis_title="Vf [-]", yaxis_title="F [MPa]")
-        st.plotly_chart(fig2, width="stretch")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=VF_SWEEP,
+        y=sweep["F1t"],
+        name="F₁ₜ (ROM, dominancia de fibra)",
+        line=dict(color=ACCENT, width=LINE_WIDTH),
+    ))
+    fig.add_trace(go.Scatter(
+        x=VF_SWEEP,
+        y=sweep["F1c"],
+        name="F₁c (estimación práctica, 0.575 × F₁ₜ)",
+        line=dict(color=RUST, width=LINE_WIDTH),
+    ))
+    _reference_line(fig, vf_current)
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        title=f"F₁ₜ y F₁c vs Vf — {fiber_name}/{matrix_name}",
+        xaxis_title="Vf [-]",
+        yaxis_title="Resistencia [MPa]",
+    )
+    st.plotly_chart(fig, width="stretch")
 
 
 # ---------------------------------------------------------------------------

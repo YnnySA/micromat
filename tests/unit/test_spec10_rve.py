@@ -27,6 +27,22 @@ def _max_solape(centros, radios, lado):
     return mayor
 
 
+def _coeficiente_variacion_vecinos(centros, lado):
+    distancias = []
+    for i in range(len(centros)):
+        dist = [
+            distancia_min_imagen(
+                centros[i, 0] - centros[j, 0],
+                centros[i, 1] - centros[j, 1],
+                lado,
+            )
+            for j in range(len(centros))
+            if i != j
+        ]
+        distancias.append(min(dist))
+    return float(np.std(distancias) / np.mean(distancias))
+
+
 def test_rve_no_overlap_and_target():
     rve = generar_rve(0.60, 50.0, 5.0, 7.0, seed=5)
     assert rve.convergido
@@ -72,3 +88,8 @@ def test_polygons_cross_boundary():
     assert any(value is None for value in xs)
     reales = [value for value in xs if value is not None]
     assert min(reales) < 0.0 or max(reales) > rve.lado
+
+
+def test_rve_uniform_distribution():
+    rve = generar_rve(0.60, 50.0, 5.0, 7.0, seed=5)
+    assert _coeficiente_variacion_vecinos(rve.centros, rve.lado) < 0.20

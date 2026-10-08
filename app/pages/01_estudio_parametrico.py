@@ -16,7 +16,7 @@ def render_parametric_page() -> None:
     render_material_selector()
     st.title("Estudio Paramétrico")
     st.markdown("""
-    Explore la variación de las propiedades elásticas y de resistencia en función de la fracción volumétrica de fibra ($V_f$).
+    Explore la variación de las propiedades elásticas y de resistencia en función de la fracción volumétrica de fibra (Vf).
     """)
     
     # Selector de rango con validación
@@ -45,26 +45,26 @@ def render_parametric_page() -> None:
             st.plotly_chart(plot_e1_e2(vf_min, vf_max))
             st.markdown("""
             **Interpretación:**
-            - $E_1$ crece de forma estrictamente lineal con $V_f$ en ambos sistemas bajo la Regla de Mezclas (ROM). El compuesto con fibra IM7 exhibe una pendiente mucho mayor debido a la extrema rigidez longitudinal de la fibra de carbono frente al vidrio.
-            - $E_2$ calculado por Halpin-Tsai muestra un comportamiento no lineal donde la matriz tiene un papel predominante. Nótese que la simple interpolación lineal (ROM) para $E_2$ sobreestima drásticamente la propiedad transversal, por lo que Halpin-Tsai es el modelo físicamente adecuado.
+            - E₁ crece de forma estrictamente lineal con Vf en ambos sistemas bajo la Regla de Mezclas (ROM). El compuesto con fibra IM7 exhibe una pendiente mucho mayor debido a la extrema rigidez longitudinal de la fibra de carbono frente al vidrio.
+            - E₂ se muestra con ROM y Halpin-Tsai (ξ = 2). La curva de Halpin-Tsai representa la estimación adoptada para la propiedad transversal; ROM se conserva como referencia comparativa.
             """)
             st.plotly_chart(plot_g12_nu12(vf_min, vf_max))
             st.markdown("""
             **Interpretación:**
-            - $G_{12}$ exhibe crecimiento parabólico bajo el modelo de Halpin-Tsai.
-            - $\\nu_{12}$ decrece de forma perfectamente lineal ya que el coeficiente de Poisson de las fibras es menor que el de la matriz.
+            - G₁₂ exhibe crecimiento no lineal bajo Halpin-Tsai (ξ = 1), con una respuesta distinta para IM7/8552 y E-glass/Epoxi.
+            - ν₁₂ decrece linealmente bajo la Regla de Mezclas (ROM), porque el coeficiente de Poisson de las fibras es menor que el de la matriz.
             """)
             
         with tab_strength:
             st.plotly_chart(plot_strength_im7(vf_min, vf_max))
             st.markdown("""
             **Interpretación (IM7/8552):**
-            - Las resistencias longitudinales $F_{1t}$ y $F_{1c}$ aumentan linealmente con $V_f$.
-            - El microbuckling práctico ($F_{1c}$) es significativamente menor que la resistencia a tracción longitudinal ($F_{1t}$), siendo usualmente el criterio crítico en diseño.
+            - Las resistencias longitudinales F₁ₜ y F₁c aumentan linealmente con Vf.
+            - F₁ₜ usa ROM con dominancia de fibra; F₁c es la estimación práctica 0.575 × F₁ₜ, significativamente menor que F₁ₜ.
             """)
             
         with tab_opt:
-            st.subheader("Optimización de Rigidez Específica ($E1/\\rho$)")
+            st.subheader("Optimización de Rigidez Específica (E₁/ρ)")
             
             opt_data = []
             for name, material in MATERIALS.items():
@@ -72,12 +72,12 @@ def render_parametric_page() -> None:
                 opt_data.append({
                     "Sistema": name,
                     "Vf Óptimo": round(v_opt, 3),
-                    "Rigidez Esp. Máxima [MPa*m³/kg]": round(max_stiff, 2)
+                    "Rigidez Esp. Máxima [MPa·m³/kg]": round(max_stiff, 2)
                 })
                 
             st.dataframe(pd.DataFrame(opt_data), hide_index=True)
             st.info(
-                "La rigidez específica máxima ($E_1/\\rho$) se maximiza en el límite superior del rango de Vf debido a la alta rigidez longitudinal de la fibra en relación con su densidad."
+                "La rigidez específica máxima (E₁/ρ) se maximiza en el límite superior del rango de Vf debido a la alta rigidez longitudinal de la fibra en relación con su densidad."
             )
 
 

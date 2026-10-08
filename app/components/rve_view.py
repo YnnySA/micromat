@@ -31,6 +31,10 @@ def _metric(column, label: str, value: str) -> None:
             st.markdown(f"**{value}**")
 
 
+def _next_rve_seed() -> None:
+    st.session_state["rve_seed"] = int(st.session_state.get("rve_seed", 0)) + 1
+
+
 def render_rve_tab(fiber: dict, matrix: dict, vf_objetivo: float) -> None:
     st.markdown(
         "El **RVE** (*Representative Volume Element*) es la región más pequeña que "
@@ -47,12 +51,28 @@ def render_rve_tab(fiber: dict, matrix: dict, vf_objetivo: float) -> None:
 
     control, realization, context = st.columns([1, 1, 2])
     lado = control.number_input("Lado del RVE (µm)", min_value=10.0, max_value=200.0,
-                                value=50.0, step=5.0)
-    if realization.button("Nueva realización", width="stretch"):
-        st.session_state["rve_seed"] = st.session_state.get("rve_seed", 0) + 1
-    seed = int(st.session_state.get("rve_seed", 0))
+                                value=50.0, step=5.0, key="rve_side")
+    seed = realization.number_input(
+        "Semilla",
+        min_value=0,
+        max_value=2_147_483_647,
+        value=0,
+        step=1,
+        help=(
+            "Controla la realización pseudoaleatoria. La misma semilla reproduce "
+            "el mismo RVE; cambiarla genera otra distribución con los mismos parámetros."
+        ),
+        key="rve_seed",
+    )
+    realization.button(
+        "Nueva realización",
+        width="stretch",
+        on_click=_next_rve_seed,
+    )
+    seed = int(seed)
     context.caption(
-        f"Vf objetivo = {vf_objetivo:.0%} · diámetro = {d_min:.1f}–{d_max:.1f} µm · semilla = {seed}"
+        f"Vf objetivo = {vf_objetivo:.0%} · diámetro = {d_min:.1f}–{d_max:.1f} µm · "
+        f"semilla = {seed}"
     )
 
     solicitado = float(vf_objetivo)
@@ -104,6 +124,9 @@ def render_rve_tab(fiber: dict, matrix: dict, vf_objetivo: float) -> None:
         "Diámetro mínimo logrado: "
         f"{resultado.diametro_min:.2f} µm · máximo: {resultado.diametro_max:.2f} µm · "
         f"iteraciones de relajación: {resultado.iteraciones}. "
+        "La semilla fija reproduce exactamente la misma realización; "
+        "«Nueva realización» cambia la semilla para explorar otra distribución "
+        "aleatoria con la misma fracción volumétrica objetivo. "
         "Fuente: Barbero (2011), *Introduction to Composite Materials Design*; "
         "lámina de VRE (U2, Clase 2)."
     )
