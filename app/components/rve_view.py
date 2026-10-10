@@ -41,7 +41,7 @@ def render_rve_tab(fiber: dict, matrix: dict, vf_objetivo: float) -> None:
         "conserva las proporciones de fibra y matriz del compuesto. Aquí se modela como "
         "una **celda periódica**: las fibras pueden cruzar los bordes y reaparecen por el "
         "borde opuesto, de modo que la fracción volumétrica de fibra en 2D es exacta, "
-        "$V_f = \\sum A_f / A_{rve}$."
+        "Vf = suma(Af) / A_rve."
     )
 
     d_min = float(fiber.get("d_min") or 5.0)

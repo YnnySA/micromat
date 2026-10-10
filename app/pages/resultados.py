@@ -3,6 +3,7 @@
 # Implements: specs/08-interfaz-vintage-unificada.md
 """Vista Streamlit de resultados micromecánicos."""
 
+import pandas as pd
 import streamlit as st
 
 from components.sidebar_inputs import render_sidebar
@@ -11,6 +12,7 @@ from components.result_cards import render_result_cards
 from components.charts import (
     render_elastic_chart,
     render_strength_chart,
+    render_validation_chart,
 )
 from components.theory_tab import render_theory_tab
 from components.rve_view import render_rve_tab
@@ -32,8 +34,28 @@ def render_results_page() -> None:
     elastic = elastic_properties_from_sidebar(fiber_props, matrix_props, vf)
     strength = strength_properties_from_sidebar(fiber_props, matrix_props, vf)
 
-    # 3. Tarjetas de resultados
+    # 3. Tarjetas de resultados y exportación rápida
     render_result_cards({**elastic, **strength})
+
+    export_df = pd.DataFrame([
+        {"Propiedad": "E1", "Valor": round(elastic["E1"], 2), "Unidad": "GPa", "Modelo": "ROM"},
+        {"Propiedad": "E2", "Valor": round(elastic["E2"], 2), "Unidad": "GPa", "Modelo": "Halpin-Tsai"},
+        {"Propiedad": "G12", "Valor": round(elastic["G12"], 2), "Unidad": "GPa", "Modelo": "Halpin-Tsai"},
+        {"Propiedad": "nu12", "Valor": round(elastic["nu12"], 4), "Unidad": "-", "Modelo": "ROM"},
+        {"Propiedad": "nu21", "Valor": round(elastic["nu21"], 4), "Unidad": "-", "Modelo": "Reciprocidad"},
+        {"Propiedad": "F1t", "Valor": round(strength["F1t"], 1), "Unidad": "MPa", "Modelo": "ROM dominancia fibra"},
+        {"Propiedad": "F1c", "Valor": round(strength["F1c"], 1), "Unidad": "MPa", "Modelo": "0.575 x F1t"},
+        {"Propiedad": "F2t", "Valor": round(strength["F2t"], 1), "Unidad": "MPa", "Modelo": "Barbero"},
+        {"Propiedad": "F2c", "Valor": round(strength["F2c"], 1), "Unidad": "MPa", "Modelo": "4.0 x F2t"},
+        {"Propiedad": "F6", "Valor": round(strength["F6"], 1), "Unidad": "MPa", "Modelo": "Barbero"},
+    ])
+    st.download_button(
+        "Descargar resultados actuales (CSV)",
+        data=export_df.to_csv(index=False).encode("utf-8"),
+        file_name=f"micromat_{fiber_name}_{matrix_name}_Vf_{int(vf*100)}.csv",
+        mime="text/csv",
+        key="btn_download_results",
+    )
 
     # 4. Pestañas
     tab_elastic, tab_strength, tab_rve, tab_validation, tab_design, tab_theory = st.tabs(
@@ -72,6 +94,7 @@ def render_results_page() -> None:
         state_key = f"experimental_{fiber_name}_{matrix_name}".replace(" ", "_")
         experimental = st.session_state.setdefault(state_key, experimental.copy())
         validation_rows_selected = validation_rows_from_props(elastic, strength, experimental)
+        render_validation_chart(validation_rows_selected)
         edited = render_validation_editor(validation_rows_selected, key=f"validation_{state_key}")
         edited_experimental = {
             row["Propiedad"]: float(row["Experimental"])
