@@ -20,18 +20,32 @@ DEFAULT_MATRIX = "Epoxi 8552"
 
 def _select(options: list[str], default: str, label: str, key: str) -> str:
     current = st.session_state.get(key)
-    if current is not None and current not in options:
-        st.session_state[key] = options[0]
-    index = options.index(default) if default in options else 0
+    if current is not None and current in options:
+        index = options.index(current)
+    elif default in options:
+        index = options.index(default)
+    else:
+        index = 0
     return st.selectbox(label, options, index=index, key=key, label_visibility="collapsed")
 
 
 def _apply_pending_selection() -> None:
-    """Aplica una selección pendiente antes de instanciar los selectbox."""
+    """Aplica una selección pendiente antes de instanciar los widgets."""
     for kind, widget_key in (("fiber", "fiber_select"), ("matrix", "matrix_select")):
         pending = st.session_state.pop(f"_select_{kind}", None)
         if pending is not None:
             st.session_state[widget_key] = pending
+    pending_vf = st.session_state.pop("_select_vf", None)
+    if pending_vf is not None:
+        st.session_state["vf_slider"] = pending_vf
+
+
+def _set_preset(fiber_name: str, matrix_name: str, vf_val: float, seed_val: int | None = None) -> None:
+    st.session_state["_select_fiber"] = fiber_name
+    st.session_state["_select_matrix"] = matrix_name
+    st.session_state["_select_vf"] = vf_val
+    if seed_val is not None:
+        st.session_state["rve_seed"] = seed_val
 
 
 # ---------------------------------------------------------------------------
@@ -113,14 +127,26 @@ def render_sidebar() -> tuple[dict, dict, float, str, str]:
     _apply_pending_selection()
 
     with st.sidebar:
-        st.caption("FRACCIÓN DE VOLUMEN")
-        vf = st.slider("Vf", min_value=0.01, max_value=0.80, value=0.60, step=0.01,
-                       format="%.2f", label_visibility="collapsed")
+        st.caption("CASOS DE REFERENCIA DEL CURSO")
+        col_c1, col_c2 = st.columns(2)
+        if col_c1.button("Carbono (IM7)", width="stretch", help="IM7/8552 CFRP: Vf = 0.60"):
+            _set_preset("IM7", "Epoxi 8552", 0.60, 5)
+            st.rerun()
+        if col_c2.button("Vidrio (E-glass)", width="stretch", help="E-glass/Epoxi GFRP: Vf = 0.55"):
+            _set_preset("E-glass", "Epoxi GFRP", 0.55, 143)
+            st.rerun()
+
+        st.divider()
+
+        st.caption("FRACCIÓN DE VOLUMEN (Vf)")
+        vf_default = float(st.session_state.get("vf_slider", 0.60))
+        vf = st.slider("Vf", min_value=0.01, max_value=0.80, value=vf_default, step=0.01,
+                       format="%.2f", label_visibility="collapsed", key="vf_slider")
         st.caption(f"Vf = {vf:.0%} · Vm = {1 - vf:.2f}")
 
         st.divider()
 
-        st.caption("PROPIEDADES DE FIBRA")
+        st.caption("CONSTITUYENTES")
         fibers = material_db.list_fibers()
         if fibers:
             fiber_name = _select(fibers, DEFAULT_FIBER, "Fibra", "fiber_select")
@@ -130,16 +156,6 @@ def render_sidebar() -> tuple[dict, dict, float, str, str]:
             fiber = {"E1": 276.0, "E2": 19.0, "G12": 27.0, "nu12": 0.20, "F1t": 5180.0, "etu": 0.0187, "density": 1780.0, "d_min": 5.0, "d_max": 7.0}
             st.warning("No hay fibras en la base de datos.")
 
-        with st.expander("Editar propiedades de fibra", expanded=False):
-            fiber = _fiber_fields(f"fiber_{fiber_name}", fiber)
-            if st.button("Guardar fibra", key="save_fiber", width="stretch"):
-                if fiber_name in fibers:
-                    material_db.save_fiber(fiber_name, fiber)
-                    st.toast(f"Fibra «{fiber_name}» guardada.")
-
-        st.divider()
-
-        st.caption("PROPIEDADES DE MATRIZ")
         matrices = material_db.list_matrices()
         if matrices:
             matrix_name = _select(matrices, DEFAULT_MATRIX, "Matriz", "matrix_select")
@@ -149,16 +165,50 @@ def render_sidebar() -> tuple[dict, dict, float, str, str]:
             matrix = {"E": 4.67, "nu": 0.36, "G": 1.72, "Ft": 121.0, "density": 1300.0}
             st.warning("No hay matrices en la base de datos.")
 
-        with st.expander("Editar propiedades de matriz", expanded=False):
+        st.divider()
+
+        st.caption("MICROESTRUCTURA RVE (DIÁMETROS)")
+        cd1, cd2 = st.columns(2)
+        d_min_val = cd1.number_input(
+            "d mín (µm)",
+            value=float(fiber.get("d_min", 5.0)),
+            min_value=0.1,
+            max_value=100.0,
+            step=0.5,
+            key=f"dmin_{fiber_name}",
+        )
+        d_max_val = cd2.number_input(
+            "d máx (µm)",
+            value=float(fiber.get("d_max", 7.0)),
+            min_value=0.1,
+            max_value=100.0,
+            step=0.5,
+            key=f"dmax_{fiber_name}",
+        )
+        fiber["d_min"] = d_min_val
+        fiber["d_max"] = d_max_val
+
+        st.divider()
+
+        with st.expander("⚙️ Parámetros avanzados y base de datos", expanded=False):
+            st.caption("EDITAR PROPIEDADES DE FIBRA")
+            fiber = _fiber_fields(f"fiber_{fiber_name}", fiber)
+            fiber["d_min"], fiber["d_max"] = d_min_val, d_max_val
+            if st.button("Guardar fibra", key="save_fiber", width="stretch"):
+                if fiber_name in fibers:
+                    material_db.save_fiber(fiber_name, fiber)
+                    st.toast(f"Fibra «{fiber_name}» guardada.")
+
+            st.divider()
+            st.caption("EDITAR PROPIEDADES DE MATRIZ")
             matrix = _matrix_fields(f"matrix_{matrix_name}", matrix)
             if st.button("Guardar matriz", key="save_matrix", width="stretch"):
                 if matrix_name in matrices:
                     material_db.save_matrix(matrix_name, matrix)
                     st.toast(f"Matriz «{matrix_name}» guardada.")
 
-        st.divider()
-
-        with st.expander("Gestionar materiales", expanded=False):
+            st.divider()
+            st.caption("GESTIONAR MATERIALES")
             _manage_section(fiber, matrix)
 
     return fiber, matrix, vf, fiber_name, matrix_name
