@@ -58,8 +58,8 @@ def render_results_page() -> None:
     )
 
     # 4. Pestañas
-    tab_elastic, tab_strength, tab_rve, tab_validation, tab_design, tab_theory = st.tabs(
-        ["Módulos Elásticos", "Resistencias", "RVE", "Validación", "Caso práctico", "Teoría"]
+    tab_rve, tab_elastic, tab_strength, tab_validation, tab_design, tab_theory = st.tabs(
+        ["RVE (microestructura)", "Módulos Elásticos", "Resistencias", "Validación", "Caso práctico", "Teoría"]
     )
 
     with tab_elastic:

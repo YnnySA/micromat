@@ -139,8 +139,8 @@ def render_sidebar() -> tuple[dict, dict, float, str, str]:
         st.divider()
 
         st.caption("FRACCIÓN DE VOLUMEN (Vf)")
-        vf_default = float(st.session_state.get("vf_slider", 0.60))
-        vf = st.slider("Vf", min_value=0.01, max_value=0.80, value=vf_default, step=0.01,
+        st.session_state.setdefault("vf_slider", 0.60)
+        vf = st.slider("Vf", min_value=0.01, max_value=0.80, step=0.01,
                        format="%.2f", label_visibility="collapsed", key="vf_slider")
         st.caption(f"Vf = {vf:.0%} · Vm = {1 - vf:.2f}")
 
