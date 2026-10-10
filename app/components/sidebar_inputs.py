@@ -193,6 +193,7 @@ def render_sidebar() -> tuple[dict, dict, float, str, str]:
         with st.expander("⚙️ Parámetros avanzados y base de datos", expanded=False):
             st.caption("EDITAR PROPIEDADES DE FIBRA")
             fiber = _fiber_fields(f"fiber_{fiber_name}", fiber)
+            fiber["d_min"], fiber["d_max"] = d_min_val, d_max_val
             if st.button("Guardar fibra", key="save_fiber", width="stretch"):
                 if fiber_name in fibers:
                     material_db.save_fiber(fiber_name, fiber)
