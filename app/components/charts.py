@@ -320,3 +320,43 @@ def render_comparison_chart(matrix: dict, vf_current: float) -> None:
         fig2.add_trace(go.Bar(x=dataframe["Fibra"], y=dataframe["F1t (MPa)"], name="F₁ₜ", marker_color=RUST))
         fig2.update_layout(**PLOTLY_LAYOUT, title="Resistencia longitudinal F₁ₜ", yaxis_title="F₁ₜ [MPa]")
         st.plotly_chart(fig2, width="stretch")
+
+
+# ---------------------------------------------------------------------------
+# Pestaña: Validación experimental
+# ---------------------------------------------------------------------------
+
+def render_validation_chart(rows: list) -> None:
+    """Barras horizontales de error relativo (|Calculado - Exp| / Exp * 100)."""
+    if not rows:
+        return
+    props = [r.property_name for r in rows]
+    errors = [round(r.error_percent, 1) for r in rows]
+    colors = [RUST if err > 20.0 else ACCENT for err in errors]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=errors,
+        y=props,
+        orientation="h",
+        marker_color=colors,
+        text=[f"{e:.1f}%" for e in errors],
+        textposition="auto",
+        name="Error relativo",
+    ))
+    fig.add_vline(
+        x=20.0,
+        line=dict(color=RUST, width=1.4, dash="dash"),
+        annotation_text="Límite 20% (alerta)",
+        annotation_position="top right",
+    )
+    layout = dict(**PLOTLY_LAYOUT)
+    layout.update(
+        title="Discrepancia modelo vs experimental (|Calculado - Exp| / Exp)",
+        xaxis_title="Error relativo (%)",
+        yaxis_title="Propiedad",
+        height=330,
+    )
+    fig.update_layout(**layout)
+    st.plotly_chart(fig, width="stretch")
+

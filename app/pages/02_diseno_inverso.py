@@ -15,7 +15,7 @@ def render_inverse_design_page() -> None:
     render_material_selector()
     st.title("Diseño Inverso")
     st.markdown("""
-    Encuentre la fracción volumétrica de fibra ($V_f$) mínima necesaria para cumplir con requisitos de rigidez y resistencia.
+    Encuentre la fracción volumétrica de fibra (Vf) mínima necesaria para cumplir con requisitos de rigidez y resistencia.
     """)
     
     with st.form("design_params"):
