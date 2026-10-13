@@ -11,6 +11,7 @@ from core.rve import (
     distancia_min_imagen,
     generar_rve,
     poligonos_periodicos,
+    trozos_visibles,
 )
 
 
@@ -93,3 +94,21 @@ def test_polygons_cross_boundary():
 def test_rve_uniform_distribution():
     rve = generar_rve(0.60, 50.0, 5.0, 7.0, seed=5)
     assert _coeficiente_variacion_vecinos(rve.centros, rve.lado) < 0.20
+
+
+def test_trozos_visibles_casos_simples():
+    centros = np.array([[25.0, 25.0], [1.0, 25.0], [1.0, 1.0]])
+    radios = np.array([3.0, 3.0, 3.0])
+    n = [len(t) for t in trozos_visibles(centros, radios, 50.0)]
+    assert n == [1, 2, 4]
+
+
+def test_trozos_visibles_cuenta_fibras_no_trozos():
+    # Caso de la pauta para vidrio: 8 fibras en 50 um, semilla 143.
+    rve = generar_rve(0.55, 50.0, 13.0, 17.0, seed=143)
+    trozos = trozos_visibles(rve.centros, rve.radios, rve.lado)
+    assert len(trozos) == rve.n_fibras
+    assert all(1 <= len(t) <= 4 for t in trozos)
+    cortadas = [t for t in trozos if len(t) > 1]
+    assert cortadas
+    assert sum(len(t) for t in cortadas) > len(cortadas)

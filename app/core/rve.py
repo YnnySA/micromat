@@ -204,6 +204,27 @@ def generar_rve(vf_objetivo: float, lado: float = 50.0, d_min: float = 5.0,
     return ultimo  # type: ignore[return-value]
 
 
+def trozos_visibles(centros: np.ndarray, radios: np.ndarray,
+                    lado: float) -> list[list[tuple[float, float]]]:
+    """Centros de las copias periódicas de cada fibra que se ven dentro de la celda.
+
+    Una fibra completa tiene 1 trozo; una que cruza un borde, 2; una que cruza
+    una esquina, 3 o 4. Una copia se ve si su disco entra en ``[0, lado]²``.
+    """
+    trozos: list[list[tuple[float, float]]] = []
+    for (cx, cy), r in zip(centros, radios):
+        copias = []
+        for ox in (-lado, 0.0, lado):
+            for oy in (-lado, 0.0, lado):
+                x0, y0 = cx + ox, cy + oy
+                px = min(max(x0, 0.0), lado)
+                py = min(max(y0, 0.0), lado)
+                if math.hypot(x0 - px, y0 - py) < r:
+                    copias.append((x0, y0))
+        trozos.append(copias)
+    return trozos
+
+
 def poligonos_periodicos(centros: np.ndarray, radios: np.ndarray, lado: float,
                          n_lados: int = 48) -> tuple[list[float | None], list[float | None]]:
     """Polígonos de cada fibra y sus 8 copias periódicas, separados por ``None``."""

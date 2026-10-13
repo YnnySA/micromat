@@ -15,11 +15,14 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core import material_db
-from core.rve import VF_MAX_PRACTICO, RveResult, generar_rve, poligonos_periodicos
+from core.rve import VF_MAX_PRACTICO, RveResult, generar_rve, poligonos_periodicos, trozos_visibles
 from components.charts import GRID, INK, PAPER, FONT
 
 FIBER_COLOR = "#2a5d6b"
+FIBER_CUT_COLOR = "#6fa3ad"
 FIBER_EDGE = "#12333f"
+# Hasta este número de fibras se rotulan los trozos de las fibras cortadas.
+N_ROTULOS_MAX = 20
 MATRIX_COLOR = "#efe4c8"
 
 # Criterio práctico de representatividad: lado del RVE >= 10 diámetros medios.
@@ -43,9 +46,8 @@ def _rve_cached(vf_objetivo: float, lado: float, d_min: float, d_max: float, see
 def _stats(res: RveResult) -> dict[str, float]:
     """Métricas geométricas usadas en la exposición."""
     c, r, lado = res.centros, res.radios, res.lado
-    cortadas = int(np.sum(
-        (c[:, 0] < r) | (c[:, 0] > lado - r) | (c[:, 1] < r) | (c[:, 1] > lado - r)
-    ))
+    n_trozos = [len(t) for t in trozos_visibles(c, r, lado)]
+    cortadas = sum(1 for n in n_trozos if n > 1)
     if len(r) > 1:
         d = c[:, None, :] - c[None, :, :]
         d -= lado * np.round(d / lado)
@@ -58,6 +60,7 @@ def _stats(res: RveResult) -> dict[str, float]:
     return {
         "cortadas": cortadas,
         "completas": res.n_fibras - cortadas,
+        "trozos_borde": sum(n for n in n_trozos if n > 1),
         "d_medio": d_medio,
         "gap": max(gap, 0.0),
         "ld": lado / d_medio,
@@ -65,13 +68,36 @@ def _stats(res: RveResult) -> dict[str, float]:
 
 
 def _figure(res: RveResult, title: str, height: int = 540) -> go.Figure:
-    xs, ys = poligonos_periodicos(res.centros, res.radios, res.lado)
+    lado = res.lado
+    trozos = trozos_visibles(res.centros, res.radios, lado)
+    cortada = np.array([len(t) > 1 for t in trozos], dtype=bool)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=xs, y=ys, mode="lines", fill="toself",
-        fillcolor=FIBER_COLOR, line=dict(color=FIBER_EDGE, width=0.6),
-        hoverinfo="skip", showlegend=False,
-    ))
+    # Fibras completas en tono oscuro; las cortadas (y todas sus copias) en tono claro.
+    for mask, color in ((~cortada, FIBER_COLOR), (cortada, FIBER_CUT_COLOR)):
+        if not mask.any():
+            continue
+        xs, ys = poligonos_periodicos(res.centros[mask], res.radios[mask], lado)
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines", fill="toself",
+            fillcolor=color, line=dict(color=FIBER_EDGE, width=0.6),
+            hoverinfo="skip", showlegend=False,
+        ))
+    if res.n_fibras <= N_ROTULOS_MAX:
+        # Mismo número en cada trozo visible: así se ve qué trozos son la misma fibra.
+        lx, ly, lt = [], [], []
+        for i, copias in enumerate(trozos):
+            if len(copias) < 2:
+                continue
+            r = float(res.radios[i])
+            for x0, y0 in copias:
+                lx.append(0.5 * (max(x0 - r, 0.0) + min(x0 + r, lado)))
+                ly.append(0.5 * (max(y0 - r, 0.0) + min(y0 + r, lado)))
+                lt.append(str(i + 1))
+        fig.add_trace(go.Scatter(
+            x=lx, y=ly, mode="text", text=lt,
+            textfont=dict(family=FONT, size=13, color=INK),
+            hoverinfo="skip", showlegend=False,
+        ))
     fig.add_trace(go.Scatter(
         x=res.centros[:, 0], y=res.centros[:, 1], mode="markers",
         marker=dict(size=3, color=MATRIX_COLOR),
@@ -190,7 +216,8 @@ def render_rve_tab(fiber: dict, matrix: dict, vf_objetivo: float) -> None:
     _metric(fila[0], "Nº de fibras", f"{res.n_fibras}",
             "Cada fibra se cuenta una sola vez, aunque cruce el borde.")
     _metric(fila[1], "Completas / cortadas", f"{s['completas']} / {s['cortadas']}",
-            "Cortadas: cruzan el borde y reaparecen por el lado opuesto.")
+            "Se cuentan fibras, no trozos. Una fibra cortada cruza el borde y "
+            "reaparece por el lado opuesto: se ve en 2 trozos, o en 3–4 si toca una esquina.")
     _metric(fila[2], "Vf logrado", f"{res.vf_logrado:.3f}")
     _metric(fila[3], "Diámetro medio", f"{s['d_medio']:.2f} µm")
     _metric(fila[4], "Separación mínima", f"{s['gap']:.2f} µm",
@@ -209,6 +236,15 @@ def render_rve_tab(fiber: dict, matrix: dict, vf_objetivo: float) -> None:
         _figure(res, f"RVE periódico · {lado:.0f} × {lado:.0f} µm · {res.n_fibras} fibras"),
         width="stretch",
     )
+    if s["cortadas"]:
+        rotulo = (" Los trozos con el mismo número son la misma fibra."
+                  if res.n_fibras <= N_ROTULOS_MAX else "")
+        st.caption(
+            f"Tono oscuro: {s['completas']} fibras completas. Tono claro: {s['cortadas']} fibras "
+            f"cortadas por el borde, que en pantalla se ven como {s['trozos_borde']} trozos. "
+            f"Cada trozo es parte de una fibra que sale por un lado y entra por el opuesto, "
+            f"y su área se cuenta una sola vez.{rotulo}"
+        )
 
     with st.expander("Límites de empaquetamiento y detalles del algoritmo", expanded=False):
         st.markdown(
