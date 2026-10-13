@@ -46,3 +46,4 @@ respetando un Vf objetivo que nunca se supera.
 | AC-10-05 | El Vf objetivo no supera el máximo práctico | `test_vf_cap` |
 | AC-10-06 | El dibujo incluye copias que cruzan los bordes | `test_polygons_cross_boundary` |
 | AC-10-07 | La uniformización reduce agrupamientos manteniendo la periodicidad y el no-solape | `test_rve_uniform_distribution` |
+| AC-10-08 | "Completas / cortadas" cuenta fibras, no trozos; las cortadas se pintan en otro tono, sus trozos se rotulan con el mismo número (n ≤ 20) y se informa cuántos trozos se ven | `test_trozos_visibles_casos_simples`, `test_trozos_visibles_cuenta_fibras_no_trozos` |
